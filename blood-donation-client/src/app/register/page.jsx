@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '../context/AuthContext';
 import { GiBloodDrop } from 'react-icons/gi';
 import { 
   FaUser, FaEnvelope, FaLock, FaPhone, FaMapMarkerAlt, 
@@ -11,6 +10,7 @@ import {
 } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 export default function Register() {
   const [formData, setFormData] = useState({
