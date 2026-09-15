@@ -19,8 +19,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
 
-  const API_URL = 'http://localhost:5000/api';
-
+  const API_URL = process.env.SERVER_URL;
   // Initialize axios defaults
   useEffect(() => {
     const storedToken = localStorage.getItem('token');

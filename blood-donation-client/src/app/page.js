@@ -26,7 +26,7 @@ export default function Home() {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5000/api/statistics', {
+        const response = await fetch(`${process.env.SERVER_URL}/statistics`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (response.ok) {
