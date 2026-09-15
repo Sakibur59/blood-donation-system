@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { GiBloodDrop } from 'react-icons/gi';
+import { GiBlood } from 'react-icons/gi';
 import { 
   FaUser, FaEnvelope, FaLock, FaPhone, FaMapMarkerAlt, 
-  FaCalendarAlt, FaEye, FaEyeSlash, FaUserMd
+  FaCalendarAlt, FaEye, FaEyeSlash, FaUserMd,
+  FaCamera
 } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -91,8 +92,8 @@ export default function Register() {
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <div className="relative">
-              <GiBloodDrop className="w-20 h-20 text-red-600 blood-drop-animation" />
-              <GiBloodDrop className="w-10 h-10 text-red-400 absolute -top-2 -right-2 blood-drop-animation-delayed opacity-50" />
+              <GiBlood className="w-20 h-20 text-red-600 blood-drop-animation" />
+              <GiBlood className="w-10 h-10 text-red-400 absolute -top-2 -right-2 blood-drop-animation-delayed opacity-50" />
             </div>
           </div>
           <h2 className="text-3xl font-extrabold text-gray-800">Create Account</h2>

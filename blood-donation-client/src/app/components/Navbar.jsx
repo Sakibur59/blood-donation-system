@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
-import { GiBloodDrop } from 'react-icons/gi';
+import { GiBlood } from 'react-icons/gi';
 import { 
   FaHome, FaInfoCircle, FaPhone, FaBlog, FaUser, 
   FaSignOutAlt, FaBars, FaTimes, FaChevronDown,
@@ -81,8 +81,8 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-3 group flex-shrink-0">
             <div className="relative">
-              <GiBloodDrop className="w-10 h-10 text-red-600 blood-drop-animation" />
-              <GiBloodDrop className="w-6 h-6 text-red-400 absolute -top-1 -right-1 blood-drop-animation-delayed opacity-50" />
+              <GiBlood className="w-10 h-10 text-red-600 blood-drop-animation" />
+              <GiBlood className="w-6 h-6 text-red-400 absolute -top-1 -right-1 blood-drop-animation-delayed opacity-50" />
             </div>
             <div className="hidden sm:block">
               <span className="text-2xl font-extrabold gradient-text">BloodLink</span>

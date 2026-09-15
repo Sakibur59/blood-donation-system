@@ -6,9 +6,10 @@ import { useAuth } from './context/AuthContext';
 import { 
   FaHeart, FaUsers, FaHospital, FaAmbulance, FaChartLine, 
   FaHandHoldingHeart, FaShieldAlt, FaClock, FaAward,
-  FaQuoteLeft, FaArrowRight
+  FaQuoteLeft, FaArrowRight,
+  FaSearch
 } from 'react-icons/fa';
-import { GiBloodDrop } from 'react-icons/gi';
+import { GiBlood } from 'react-icons/gi';
 import { motion } from 'framer-motion';
 
 export default function Home() {
@@ -46,7 +47,7 @@ export default function Home() {
 
   const features = [
     {
-      icon: <GiBloodDrop className="w-8 h-8" />,
+      icon: <GiBlood className="w-8 h-8" />,
       title: 'Find Donors',
       description: 'Connect with blood donors in your area instantly',
       color: 'red'
@@ -150,7 +151,7 @@ export default function Home() {
               transition={{ duration: 0.8 }}
             >
               <div className="inline-flex items-center space-x-2 bg-red-100 px-4 py-2 rounded-full text-red-700 text-sm font-semibold mb-6">
-                <GiBloodDrop className="w-4 h-4 animate-pulse" />
+                <GiBlood className="w-4 h-4 animate-pulse" />
                 <span>Every Drop Counts</span>
               </div>
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight mb-6">
@@ -212,7 +213,7 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-pink-500 rounded-3xl blur-2xl opacity-20"></div>
                 <div className="relative bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-2xl">
                   <div className="flex justify-center mb-6">
-                    <GiBloodDrop className="w-24 h-24 text-red-600 blood-drop-animation" />
+                    <GiBlood className="w-24 h-24 text-red-600 blood-drop-animation" />
                   </div>
                   <div className="space-y-4">
                     <div className="bg-red-50 rounded-2xl p-4 flex items-center space-x-4">
