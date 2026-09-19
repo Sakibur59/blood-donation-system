@@ -13,14 +13,20 @@ export const useAuth = () => {
   }
   return context;
 };
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(null);
 
-  const API_URL = process.env.SERVER_URL;
-  // Initialize axios defaults
+  // Configure axios defaults
+  useEffect(() => {
+    axios.defaults.baseURL = API_URL;
+    axios.defaults.headers.common['Content-Type'] = 'application/json';
+  }, []);
+
+  // Initialize from localStorage
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
@@ -43,7 +49,6 @@ export function AuthProvider({ children }) {
       localStorage.setItem('user', JSON.stringify(response.data));
     } catch (error) {
       console.error('Error fetching user:', error);
-      // Token expired or invalid
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       setToken(null);
@@ -56,6 +61,8 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
+      console.log('🔵 Login attempt:', { email, API_URL });
+      
       const response = await axios.post(`${API_URL}/auth/login`, {
         email,
         password
@@ -72,6 +79,7 @@ export function AuthProvider({ children }) {
       toast.success(`Welcome back, ${userData.name}! 🩸`);
       return { success: true, user: userData };
     } catch (error) {
+      console.error('❌ Login error:', error);
       const errorMsg = error.response?.data?.error || 'Login failed';
       toast.error(errorMsg);
       return { success: false, error: errorMsg };
@@ -80,7 +88,20 @@ export function AuthProvider({ children }) {
 
   const register = async (userData) => {
     try {
-      const response = await axios.post(`${API_URL}/auth/register`, userData);
+      console.log('🔵 Register attempt:', { 
+        url: `${API_URL}/auth/register`, 
+        data: userData 
+      });
+
+      // ✅ Full URL use করুন
+      const response = await axios.post(`${API_URL}/auth/register`, userData, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('✅ Register response:', response.data);
+
       const { token: newToken, user: newUser } = response.data;
       
       localStorage.setItem('token', newToken);
@@ -92,7 +113,13 @@ export function AuthProvider({ children }) {
       toast.success('Account created successfully! Welcome to BloodLink ❤️');
       return { success: true, user: newUser };
     } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Registration failed';
+      console.error('❌ Register error:', error);
+      console.error('Error response:', error.response?.data);
+      
+      const errorMsg = error.response?.data?.error || 
+                       error.response?.data?.message || 
+                       error.message ||
+                       'Registration failed';
       toast.error(errorMsg);
       return { success: false, error: errorMsg };
     }
@@ -153,6 +180,7 @@ export function AuthProvider({ children }) {
     user,
     token,
     loading,
+    API_URL,  // ✅ Export করলাম যাতে অন্য কোথাও use করা যায়
     login,
     register,
     logout,
