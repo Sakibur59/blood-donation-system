@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 
 export const metadata = {
   title: 'BloodLink - Save Lives Through Blood Donation',
@@ -30,6 +31,7 @@ export default function RootLayout({ children }) {
           <SocketProvider>
             <Navbar />
             <main>{children}</main>
+            <Footer></Footer>
             <Toaster 
               position="top-right"
               toastOptions={{
