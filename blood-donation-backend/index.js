@@ -429,12 +429,11 @@ app.post('/api/auth/upload-profile', auth, upload.single('profileImage'), async 
 
 // ==================== DONOR ROUTES (Blood Give) ====================
 
-// Donor donates blood
+// 1️⃣ Donor donates blood
 app.post('/api/donor/donate', auth, authorize('donor'), async (req, res) => {
   try {
     const { bloodBankId, bloodGroup, quantity, notes } = req.body;
 
-    // Check if blood bank exists
     const bloodBank = await db.collection('blood_banks').findOne({ 
       _id: new ObjectId(bloodBankId) 
     });
@@ -442,7 +441,6 @@ app.post('/api/donor/donate', auth, authorize('donor'), async (req, res) => {
       return res.status(404).json({ error: 'Blood bank not found' });
     }
 
-    // Check if donor can donate (age, last donation, etc.)
     const donor = await db.collection('users').findOne({ _id: req.userId });
     const today = new Date();
     const lastDonation = donor.lastDonation ? new Date(donor.lastDonation) : null;
@@ -457,7 +455,6 @@ app.post('/api/donor/donate', auth, authorize('donor'), async (req, res) => {
       }
     }
 
-    // Create donation record
     const donation = {
       donorId: req.userId,
       donorName: donor.name,
@@ -475,7 +472,6 @@ app.post('/api/donor/donate', auth, authorize('donor'), async (req, res) => {
 
     const result = await db.collection('donations').insertOne(donation);
 
-    // Update blood bank inventory
     const currentStock = bloodBank.bloodGroups[donation.bloodGroup] || 0;
     await db.collection('blood_banks').updateOne(
       { _id: new ObjectId(bloodBankId) },
@@ -487,7 +483,6 @@ app.post('/api/donor/donate', auth, authorize('donor'), async (req, res) => {
       }
     );
 
-    // Update donor's donation count
     await db.collection('users').updateOne(
       { _id: req.userId },
       { 
@@ -498,7 +493,6 @@ app.post('/api/donor/donate', auth, authorize('donor'), async (req, res) => {
 
     const newDonation = await db.collection('donations').findOne({ _id: result.insertedId });
 
-    // Emit socket event
     io.emit('newDonation', newDonation);
 
     res.status(201).json({
@@ -512,7 +506,7 @@ app.post('/api/donor/donate', auth, authorize('donor'), async (req, res) => {
   }
 });
 
-// Get donor's donation history
+// 2️⃣ Get donor's donation history
 app.get('/api/donor/my-donations', auth, authorize('donor'), async (req, res) => {
   try {
     const donations = await db.collection('donations')
@@ -531,7 +525,7 @@ app.get('/api/donor/my-donations', auth, authorize('donor'), async (req, res) =>
   }
 });
 
-// Get donor's donation statistics
+// 3️⃣ Get donor's donation statistics
 app.get('/api/donor/stats', auth, authorize('donor'), async (req, res) => {
   try {
     const user = await db.collection('users').findOne({ _id: req.userId });
@@ -559,6 +553,55 @@ app.get('/api/donor/stats', auth, authorize('donor'), async (req, res) => {
   }
 });
 
+// 4️⃣
+app.get('/api/donor/pending-requests', auth, authorize('donor'), async (req, res) => {
+  try {
+    const requests = await db.collection('blood_requests')
+      .find({ status: 'pending' })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .toArray();
+
+    // Hospital details
+    const requestsWithDetails = await Promise.all(requests.map(async (request) => {
+      if (request.hospitalId) {
+        const hospital = await db.collection('users').findOne(
+          { _id: new ObjectId(request.hospitalId) },
+          { projection: { name: 1, email: 1, phone: 1, profileImage: 1 } }
+        );
+        return { ...request, hospitalInfo: hospital };
+      }
+      return request;
+    }));
+
+    res.json({
+      success: true,
+      count: requestsWithDetails.length,
+      requests: requestsWithDetails
+    });
+  } catch (error) {
+    console.error('Get pending requests error:', error);
+    res.status(500).json({ error: 'Failed to get pending requests' });
+  }
+});
+
+// Get all blood banks for donor
+app.get('/api/donor/blood-banks', auth, authorize('donor'), async (req, res) => {
+  try {
+    const bloodBanks = await db.collection('blood_banks')
+      .find()
+      .sort({ name: 1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      bloodBanks
+    });
+  } catch (error) {
+    console.error('Get blood banks error:', error);
+    res.status(500).json({ error: 'Failed to get blood banks' });
+  }
+});
 // ==================== HOSPITAL ROUTES (Blood Take/Request) ====================
 
 // Hospital requests blood
