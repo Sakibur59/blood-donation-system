@@ -602,6 +602,105 @@ app.get('/api/donor/blood-banks', auth, authorize('donor'), async (req, res) => 
     res.status(500).json({ error: 'Failed to get blood banks' });
   }
 });
+
+// ==================== USER PROFILE & ACCOUNT ROUTES ====================
+
+// Update user profile
+app.put('/api/users/profile', auth, async (req, res) => {
+  try {
+    const { name, phone, bloodGroup, age, address } = req.body;
+
+    const updateData = {
+      name,
+      phone,
+      bloodGroup,
+      age: age ? parseInt(age) : undefined,
+      address,
+      updatedAt: new Date()
+    };
+
+    Object.keys(updateData).forEach(key =>
+      updateData[key] === undefined && delete updateData[key]
+    );
+
+    await db.collection('users').updateOne(
+      { _id: req.userId },
+      { $set: updateData }
+    );
+
+    const updatedUser = await db.collection('users').findOne(
+      { _id: req.userId },
+      { projection: { password: 0 } }
+    );
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Change password
+app.put('/api/users/change-password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Both passwords required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const user = await db.collection('users').findOne({ _id: req.userId });
+
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await db.collection('users').updateOne(
+      { _id: req.userId },
+      { 
+        $set: { 
+          password: hashedPassword,
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// Delete account
+app.delete('/api/users/account', auth, async (req, res) => {
+  try {
+    await db.collection('users').deleteOne({ _id: req.userId });
+    
+    res.json({
+      success: true,
+      message: 'Account deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
 // ==================== HOSPITAL ROUTES (Blood Take/Request) ====================
 
 // Hospital requests blood
