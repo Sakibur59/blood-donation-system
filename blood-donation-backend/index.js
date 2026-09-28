@@ -602,6 +602,203 @@ app.get('/api/donor/blood-banks', auth, authorize('donor'), async (req, res) => 
     res.status(500).json({ error: 'Failed to get blood banks' });
   }
 });
+// ==================== PUBLIC DONORS LIST ====================
+
+app.get('/api/donors', auth, async (req, res) => {
+  try {
+    const { bloodGroup, search, limit = 100 } = req.query;
+
+    const filter = { role: 'donor', isActive: true };
+    
+    if (bloodGroup) filter.bloodGroup = bloodGroup;
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { address: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const donors = await db.collection('users')
+      .find(filter, { 
+        projection: { 
+          password: 0,
+        } 
+      })
+      .limit(parseInt(limit))
+      .sort({ donationCount: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      total: donors.length,
+      donors
+    });
+  } catch (error) {
+    console.error('Get donors error:', error);
+    res.status(500).json({ error: 'Failed to get donors' });
+  }
+});
+
+// ==================== START CONVERSATION ====================
+
+// Start or get existing conversation with a user
+app.post('/api/conversations/start', auth, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const currentUserId = req.userId.toString();
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID required' });
+    }
+
+    if (userId === currentUserId) {
+      return res.status(400).json({ error: 'Cannot start conversation with yourself' });
+    }
+
+    // Verify target user exists
+    const targetUser = await db.collection('users').findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { password: 0 } }
+    );
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if conversation exists (any messages between users)
+    const existingConversation = await db.collection('messages').findOne({
+      $or: [
+        { from: currentUserId, to: userId },
+        { from: userId, to: currentUserId }
+      ]
+    });
+
+    res.json({
+      success: true,
+      conversationExists: !!existingConversation,
+      user: {
+        id: targetUser._id.toString(),
+        name: targetUser.name,
+        email: targetUser.email,
+        role: targetUser.role,
+        profileImage: targetUser.profileImage,
+        bloodGroup: targetUser.bloodGroup
+      }
+    });
+  } catch (error) {
+    console.error('Start conversation error:', error);
+    res.status(500).json({ error: 'Failed to start conversation' });
+  }
+});
+
+// Get user conversations
+app.get('/api/conversations', auth, async (req, res) => {
+  try {
+    const userId = req.userId.toString();
+
+    console.log('🔍 Fetching conversations for userId:', userId);
+
+    const conversations = await db.collection('messages').aggregate([
+      // Match messages involving current user (string comparison)
+      {
+        $match: {
+          $or: [
+            { from: userId },
+            { to: userId }
+          ]
+        }
+      },
+      // Sort by newest first
+      {
+        $sort: { createdAt: -1 }
+      },
+      // Group by the "other user" in the conversation
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $eq: ['$from', userId] },
+              '$to',
+              '$from'
+            ]
+          },
+          lastMessage: { $first: '$$ROOT' },
+          unreadCount: {
+            $sum: {
+              $cond: [
+                { 
+                  $and: [
+                    { $eq: ['$to', userId] },
+                    { $eq: ['$read', false] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          messageCount: { $sum: 1 }
+        }
+      },
+      // Lookup other user info
+      {
+        $addFields: {
+          otherUserId: '$_id'
+        }
+      },
+      // Convert string _id to ObjectId for lookup
+      {
+        $addFields: {
+          otherUserObjectId: {
+            $cond: [
+              { $eq: [{ $type: '$_id' }, 'string'] },
+              { $toObjectId: '$_id' },
+              '$_id'
+            ]
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'otherUserObjectId',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      {
+        $unwind: {
+          path: '$user',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $project: {
+          userId: '$_id',
+          'user.id': { $toString: '$user._id' },
+          'user.name': 1,
+          'user.email': 1,
+          'user.profileImage': 1,
+          'user.role': 1,
+          'user.bloodGroup': 1,
+          lastMessage: 1,
+          unreadCount: 1,
+          messageCount: 1
+        }
+      }
+    ]).toArray();
+
+    console.log(`✅ Found ${conversations.length} conversations`);
+    conversations.forEach(c => {
+      console.log(`   - With: ${c.user?.name} (${c.userId}) | Last: "${c.lastMessage?.message}"`);
+    });
+
+    res.json(conversations);
+  } catch (error) {
+    console.error('❌ Get conversations error:', error);
+    res.status(500).json({ error: 'Failed to get conversations' });
+  }
+});
 
 // ==================== USER PROFILE & ACCOUNT ROUTES ====================
 
