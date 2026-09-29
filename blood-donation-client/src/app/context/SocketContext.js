@@ -11,16 +11,20 @@ export const useSocket = () => {
   return context;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+
 export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const { user, token } = useAuth();
   const socketRef = useRef(null);
 
+  // 🔌 Socket connection
   useEffect(() => {
-    // Only connect if user is logged in
     if (!user || !token) {
-      // Disconnect existing socket if user logs out
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -30,18 +34,14 @@ export function SocketProvider({ children }) {
       return;
     }
 
-    // Don't create multiple connections
     if (socketRef.current?.connected) {
       return;
     }
 
-    // Create socket connection
-    const newSocket = io('http://localhost:5000', {
+    const newSocket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       withCredentials: true,
-      auth: {
-        token: token
-      },
+      auth: { token },
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
@@ -50,15 +50,11 @@ export function SocketProvider({ children }) {
     socketRef.current = newSocket;
     setSocket(newSocket);
 
-    // Connection events
     newSocket.on('connect', () => {
       console.log('✅ Socket connected:', newSocket.id);
       setIsConnected(true);
-      
-      // Join user's personal room
-      if (user.id || user._id) {
-        newSocket.emit('join', user.id || user._id);
-      }
+      const userId = user.id || user._id;
+      if (userId) newSocket.emit('join', userId.toString());
     });
 
     newSocket.on('disconnect', (reason) => {
@@ -76,7 +72,6 @@ export function SocketProvider({ children }) {
       setIsConnected(true);
     });
 
-    // Cleanup on unmount
     return () => {
       if (newSocket) {
         newSocket.off('connect');
@@ -88,7 +83,48 @@ export function SocketProvider({ children }) {
     };
   }, [user, token]);
 
-  // Helper functions for common socket operations
+  // 🔔 Global notification listener
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewNotification = (notification) => {
+      console.log('🔔 New notification:', notification);
+      setNotifications(prev => [notification, ...prev]);
+      setUnreadCount(prev => prev + 1);
+    };
+
+    socket.on('newNotification', handleNewNotification);
+
+    return () => {
+      socket.off('newNotification', handleNewNotification);
+    };
+  }, [socket]);
+
+  // 📥 Load initial notifications when user logs in
+  useEffect(() => {
+    if (!user || !token) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    const loadNotifications = async () => {
+      try {
+        const res = await fetch(`${API_URL}/notifications?limit=20`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
+      } catch (error) {
+        console.error('Load notifications error:', error);
+      }
+    };
+
+    loadNotifications();
+  }, [user, token]);
+
+  // Helper functions
   const emitEvent = (eventName, data) => {
     if (socket?.connected) {
       socket.emit(eventName, data);
@@ -106,9 +142,7 @@ export function SocketProvider({ children }) {
   };
 
   const offEvent = (eventName, callback) => {
-    if (socket) {
-      socket.off(eventName, callback);
-    }
+    if (socket) socket.off(eventName, callback);
   };
 
   const value = {
@@ -117,6 +151,11 @@ export function SocketProvider({ children }) {
     emitEvent,
     onEvent,
     offEvent,
+    // 🔔 Notification state (shared globally)
+    notifications,
+    unreadCount,
+    setNotifications,
+    setUnreadCount,
   };
 
   return (
