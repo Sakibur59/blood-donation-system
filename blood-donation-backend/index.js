@@ -799,6 +799,142 @@ app.get('/api/conversations', auth, async (req, res) => {
     res.status(500).json({ error: 'Failed to get conversations' });
   }
 });
+// ==================== NOTIFICATIONS ====================
+
+// Helper: Create and emit notification
+async function createNotification({ userId, type, title, message, link, fromUserId }) {
+  try {
+    const notification = {
+      userId: userId.toString(),
+      type, // 'message', 'blood_request', 'request_fulfilled', 'donation', 'system'
+      title,
+      message,
+      link: link || null,
+      fromUserId: fromUserId ? fromUserId.toString() : null,
+      read: false,
+      createdAt: new Date()
+    };
+
+    const result = await db.collection('notifications').insertOne(notification);
+    const savedNotification = await db.collection('notifications').findOne({ 
+      _id: result.insertedId 
+    });
+
+    // Emit to specific user via socket
+    io.to(userId.toString()).emit('newNotification', savedNotification);
+
+    return savedNotification;
+  } catch (error) {
+    console.error('Create notification error:', error);
+    return null;
+  }
+}
+
+// Get user notifications
+app.get('/api/notifications', auth, async (req, res) => {
+  try {
+    const { limit = 50, unreadOnly = false } = req.query;
+    const userId = req.userId.toString();
+
+    const filter = { userId };
+    if (unreadOnly === 'true') filter.read = false;
+
+    const notifications = await db.collection('notifications')
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .toArray();
+
+    const unreadCount = await db.collection('notifications')
+      .countDocuments({ userId, read: false });
+
+    // Get sender info for notifications
+    const notificationsWithSender = await Promise.all(
+      notifications.map(async (notif) => {
+        if (notif.fromUserId) {
+          const sender = await db.collection('users').findOne(
+            { _id: new ObjectId(notif.fromUserId) },
+            { projection: { name: 1, profileImage: 1, role: 1 } }
+          );
+          return { ...notif, sender };
+        }
+        return notif;
+      })
+    );
+
+    res.json({
+      success: true,
+      unreadCount,
+      notifications: notificationsWithSender
+    });
+  } catch (error) {
+    console.error('Get notifications error:', error);
+    res.status(500).json({ error: 'Failed to get notifications' });
+  }
+});
+
+// Mark notification as read
+app.put('/api/notifications/:id/read', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await db.collection('notifications').updateOne(
+      { _id: new ObjectId(id), userId: req.userId.toString() },
+      { $set: { read: true } }
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Mark notification error:', error);
+    res.status(500).json({ error: 'Failed to mark notification' });
+  }
+});
+
+// Mark all as read
+app.put('/api/notifications/read-all', auth, async (req, res) => {
+  try {
+    await db.collection('notifications').updateMany(
+      { userId: req.userId.toString(), read: false },
+      { $set: { read: true } }
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Mark all notifications error:', error);
+    res.status(500).json({ error: 'Failed to mark all as read' });
+  }
+});
+
+// Delete notification
+app.delete('/api/notifications/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await db.collection('notifications').deleteOne({
+      _id: new ObjectId(id),
+      userId: req.userId.toString()
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete notification error:', error);
+    res.status(500).json({ error: 'Failed to delete notification' });
+  }
+});
+
+// Clear all notifications
+app.delete('/api/notifications/clear-all', auth, async (req, res) => {
+  try {
+    await db.collection('notifications').deleteMany({
+      userId: req.userId.toString()
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Clear all notifications error:', error);
+    res.status(500).json({ error: 'Failed to clear notifications' });
+  }
+});
 
 // ==================== USER PROFILE & ACCOUNT ROUTES ====================
 
@@ -901,18 +1037,10 @@ app.delete('/api/users/account', auth, async (req, res) => {
 // ==================== HOSPITAL ROUTES (Blood Take/Request) ====================
 
 // Hospital requests blood
+// Hospital requests blood
 app.post('/api/hospital/request', auth, authorize('hospital'), async (req, res) => {
   try {
-    const { 
-      patientName, 
-      bloodGroup, 
-      quantity, 
-      hospital, 
-      contact, 
-      urgency, 
-      notes,
-      requiredDate 
-    } = req.body;
+    const { patientName, bloodGroup, quantity, hospital, contact, urgency, notes } = req.body;
 
     const request = {
       hospitalId: req.userId,
@@ -923,24 +1051,46 @@ app.post('/api/hospital/request', auth, authorize('hospital'), async (req, res) 
       hospital: hospital || req.user.name,
       contact: contact || req.user.phone,
       urgency: urgency || 'normal',
-      requiredDate: requiredDate ? new Date(requiredDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       notes: notes || '',
-      status: 'pending', // pending, processing, fulfilled, cancelled
+      status: 'pending',
       donorId: null,
-      fulfilledBy: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
     const result = await db.collection('blood_requests').insertOne(request);
-    const newRequest = await db.collection('blood_requests').findOne({ _id: result.insertedId });
+    const newRequest = await db.collection('blood_requests').findOne({ 
+      _id: result.insertedId 
+    });
 
-    // Emit socket event
+    // ✅ Notify all matching donors
+    const matchingDonors = await db.collection('users').find({
+      role: 'donor',
+      bloodGroup: bloodGroup,
+      isActive: true,
+      _id: { $ne: req.userId }
+    }).toArray();
+
+    console.log(`🩸 Notifying ${matchingDonors.length} donors for ${bloodGroup} request`);
+
+    // Create notifications for all matching donors
+    for (const donor of matchingDonors) {
+      await createNotification({
+        userId: donor._id,
+        type: 'blood_request',
+        title: `🩸 ${bloodGroup} Blood Needed`,
+        message: `${patientName} needs ${quantity} unit of ${bloodGroup} blood at ${hospital || req.user.name}`,
+        link: '/donor/requests',
+        fromUserId: req.userId
+      });
+    }
+
+    // Socket emit for everyone
     io.emit('newBloodRequest', newRequest);
 
     res.status(201).json({
       success: true,
-      message: 'Blood request created successfully',
+      message: `Blood request created. Notified ${matchingDonors.length} donors.`,
       request: newRequest
     });
   } catch (error) {
@@ -1029,7 +1179,6 @@ app.put('/api/hospital/request/:id', auth, authorize('hospital'), async (req, re
 app.put('/api/hospital/request/:id/fulfill', auth, authorize('donor'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { bloodBankId } = req.body;
 
     const request = await db.collection('blood_requests').findOne({ 
       _id: new ObjectId(id),
@@ -1040,37 +1189,6 @@ app.put('/api/hospital/request/:id/fulfill', auth, authorize('donor'), async (re
       return res.status(404).json({ error: 'Request not found or already fulfilled' });
     }
 
-    // Check if donor has enough blood in their blood bank
-    if (bloodBankId) {
-      const bloodBank = await db.collection('blood_banks').findOne({ 
-        _id: new ObjectId(bloodBankId) 
-      });
-      if (!bloodBank) {
-        return res.status(404).json({ error: 'Blood bank not found' });
-      }
-
-      const currentStock = bloodBank.bloodGroups[request.bloodGroup] || 0;
-      if (currentStock < request.quantity) {
-        return res.status(400).json({ 
-          error: 'Insufficient blood stock',
-          available: currentStock,
-          required: request.quantity
-        });
-      }
-
-      // Deduct from blood bank
-      await db.collection('blood_banks').updateOne(
-        { _id: new ObjectId(bloodBankId) },
-        { 
-          $set: { 
-            [`bloodGroups.${request.bloodGroup}`]: currentStock - request.quantity,
-            updatedAt: new Date()
-          } 
-        }
-      );
-    }
-
-    // Update request
     await db.collection('blood_requests').updateOne(
       { _id: new ObjectId(id) },
       { 
@@ -1084,7 +1202,6 @@ app.put('/api/hospital/request/:id/fulfill', auth, authorize('donor'), async (re
       }
     );
 
-    // Update donor's donation count
     await db.collection('users').updateOne(
       { _id: req.userId },
       { 
@@ -1097,11 +1214,21 @@ app.put('/api/hospital/request/:id/fulfill', auth, authorize('donor'), async (re
       _id: new ObjectId(id) 
     });
 
+    // ✅ Notify hospital that request was fulfilled
+    await createNotification({
+      userId: request.hospitalId,
+      type: 'request_fulfilled',
+      title: '✅ Request Fulfilled',
+      message: `${req.user.name} has fulfilled your blood request for ${request.patientName}`,
+      link: '/hospital/my-requests',
+      fromUserId: req.userId
+    });
+
     io.emit('requestFulfilled', updatedRequest);
 
     res.json({
       success: true,
-      message: 'Blood request fulfilled successfully! You saved a life ❤️',
+      message: 'Blood request fulfilled successfully!',
       request: updatedRequest
     });
   } catch (error) {
@@ -1533,14 +1660,19 @@ app.get('/api/messages/:userId', auth, async (req, res) => {
 });
 
 // Send message
+// Send message
 app.post('/api/messages', auth, async (req, res) => {
   try {
     const { to, message } = req.body;
 
+    if (!to || !message?.trim()) {
+      return res.status(400).json({ error: 'Recipient and message required' });
+    }
+
     const newMessage = {
       from: req.userId.toString(),
-      to,
-      message,
+      to: to.toString(),
+      message: message.trim(),
       read: false,
       createdAt: new Date()
     };
@@ -1550,7 +1682,18 @@ app.post('/api/messages', auth, async (req, res) => {
       _id: result.insertedId 
     });
 
-    io.to(to).emit('newMessage', savedMessage);
+    // ✅ Create notification for recipient
+    await createNotification({
+      userId: to,
+      type: 'message',
+      title: 'New Message',
+      message: `${req.user.name}: ${message.trim().substring(0, 60)}${message.length > 60 ? '...' : ''}`,
+      link: '/messages',
+      fromUserId: req.userId
+    });
+
+    // Socket emit
+    io.to(to.toString()).emit('newMessage', savedMessage);
     io.to(req.userId.toString()).emit('newMessage', savedMessage);
 
     res.status(201).json({
