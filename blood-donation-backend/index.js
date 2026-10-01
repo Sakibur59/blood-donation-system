@@ -281,41 +281,89 @@ app.get('/health', (req, res) => {
 // Register
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, role, phone, bloodGroup, age, address } = req.body;
+    const { 
+      name, email, password, role, phone, address,
+      // Donor specific
+      bloodGroup, age,
+      // Hospital specific
+      hospitalName, registrationNumber, contactPerson,
+      hospitalType, website, emergencyHotline
+    } = req.body;
 
-    const existingUser = await db.collection('users').findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
+    // Validate required fields
+    if (!email || !password || !role) {
+      return res.status(400).json({ error: 'Email, password, and role required' });
     }
 
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    if (!['donor', 'hospital'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be donor or hospital' });
+    }
+
+    // Check if user exists
+    const existingUser = await db.collection('users').findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists with this email' });
+    }
+
+    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = {
-      name,
+    // Build user object based on role
+    let user = {
       email,
       password: hashedPassword,
-      role: role || 'donor',
-      phone,
-      bloodGroup,
-      age: parseInt(age),
-      address,
+      role,
+      phone: phone || '',
+      address: address || '',
       profileImage: null,
       isVerified: false,
       isActive: true,
-      donationCount: 0,
-      lastDonation: null,
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
+    if (role === 'donor') {
+      // Donor specific fields
+      user = {
+        ...user,
+        name: name || '',
+        bloodGroup: bloodGroup || '',
+        age: age ? parseInt(age) : null,
+        donationCount: 0,
+        lastDonation: null,
+      };
+    } else if (role === 'hospital') {
+      // Hospital specific fields
+      user = {
+        ...user,
+        name: hospitalName || name || '', // use hospitalName as name
+        hospitalName: hospitalName || '',
+        registrationNumber: registrationNumber || '',
+        contactPerson: contactPerson || '',
+        hospitalType: hospitalType || 'general',
+        website: website || '',
+        emergencyHotline: emergencyHotline || '',
+        isVerified: false, // Admin needs to verify
+        totalRequests: 0,
+      };
+    }
+
     const result = await db.collection('users').insertOne(user);
     const newUser = await db.collection('users').findOne({ _id: result.insertedId });
-    
+
+    // Generate token
     const token = jwt.sign(
       { userId: newUser._id, email: newUser.email, role: newUser.role },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRE }
     );
+
+    // Return user without password
+    const { password: _, ...userWithoutPassword } = newUser;
 
     res.status(201).json({
       success: true,
@@ -326,7 +374,9 @@ app.post('/api/auth/register', async (req, res) => {
         email: newUser.email,
         role: newUser.role,
         bloodGroup: newUser.bloodGroup,
-        profileImage: newUser.profileImage
+        hospitalName: newUser.hospitalName,
+        profileImage: newUser.profileImage,
+        isVerified: newUser.isVerified,
       }
     });
   } catch (error) {
