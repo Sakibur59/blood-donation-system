@@ -991,21 +991,55 @@ app.delete('/api/notifications/clear-all', auth, async (req, res) => {
 // Update user profile
 app.put('/api/users/profile', auth, async (req, res) => {
   try {
-    const { name, phone, bloodGroup, age, address } = req.body;
+    const user = await db.collection('users').findOne({ _id: req.userId });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-    const updateData = {
-      name,
-      phone,
-      bloodGroup,
-      age: age ? parseInt(age) : undefined,
-      address,
-      updatedAt: new Date()
-    };
+    const role = user.role;
+    let updateData = { updatedAt: new Date() };
 
-    Object.keys(updateData).forEach(key =>
-      updateData[key] === undefined && delete updateData[key]
-    );
+    // ✅ Common fields
+    const commonFields = ['name', 'phone', 'address'];
+    commonFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    });
 
+    // ✅ Role-specific fields
+    if (role === 'donor') {
+      const donorFields = ['bloodGroup', 'age'];
+      donorFields.forEach(field => {
+        if (req.body[field] !== undefined) {
+          updateData[field] = field === 'age' && req.body[field] 
+            ? parseInt(req.body[field]) 
+            : req.body[field];
+        }
+      });
+    } else if (role === 'hospital') {
+      const hospitalFields = [
+        'hospitalName',
+        'registrationNumber',
+        'contactPerson',
+        'hospitalType',
+        'website',
+        'emergencyHotline',
+      ];
+      hospitalFields.forEach(field => {
+        if (req.body[field] !== undefined) {
+          updateData[field] = req.body[field];
+        }
+      });
+    
+      if (req.body.hospitalName) {
+        updateData.name = req.body.hospitalName;
+      }
+    } else if (role === 'admin') {
+    
+    }
+
+    // ✅ Update
     await db.collection('users').updateOne(
       { _id: req.userId },
       { $set: updateData }
@@ -1019,7 +1053,7 @@ app.put('/api/users/profile', auth, async (req, res) => {
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      user: updatedUser
+      user: updatedUser,
     });
   } catch (error) {
     console.error('Profile update error:', error);
