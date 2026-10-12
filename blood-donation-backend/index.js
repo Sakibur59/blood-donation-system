@@ -1550,34 +1550,44 @@ app.get('/api/admin/requests', auth, authorize('admin'), async (req, res) => {
       .sort({ createdAt: -1 })
       .toArray();
 
-    // Get donor and hospital details
-    const requestsWithDetails = await Promise.all(requests.map(async (request) => {
-      if (request.donorId) {
-        const donor = await db.collection('users').findOne(
-          { _id: new ObjectId(request.donorId) },
+    const requestsWithDetails = await Promise.all(requests.map(async (r) => {
+      // ✅ Donor info
+      let donorData = null;
+      if (r.donorId) {
+        donorData = await db.collection('users').findOne(
+          { _id: new ObjectId(r.donorId) },
           { projection: { name: 1, email: 1, phone: 1, bloodGroup: 1 } }
         );
-        request.donor = donor;
       }
-      const hospital = await db.collection('users').findOne(
-        { _id: new ObjectId(request.hospitalId) },
-        { projection: { name: 1, email: 1, phone: 1 } }
-      );
-      request.hospital = hospital;
-      return request;
+
+      // ✅ Hospital info
+      let hospitalInfo = null;
+      if (r.hospitalId) {
+        hospitalInfo = await db.collection('users').findOne(
+          { _id: new ObjectId(r.hospitalId) },
+          { projection: { name: 1, email: 1, phone: 1, hospitalName: 1 } }
+        );
+      }
+      return {
+        ...r,
+        donor: donorData,
+        hospitalInfo,
+        hospital: typeof r.hospital === 'string' 
+          ? r.hospital 
+          : hospitalInfo?.hospitalName || hospitalInfo?.name || 'N/A',
+      };
     }));
 
-    res.json({
-      success: true,
-      total: requestsWithDetails.length,
-      requests: requestsWithDetails
+    res.json({ 
+      success: true, 
+      total: requestsWithDetails.length, 
+      requests: requestsWithDetails 
     });
   } catch (error) {
-    console.error('Get requests error:', error);
+    console.error('Admin requests error:', error);
     res.status(500).json({ error: 'Failed to get requests' });
   }
 });
-
 // Get all donations (Admin only)
 app.get('/api/admin/donations', auth, authorize('admin'), async (req, res) => {
   try {
