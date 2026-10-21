@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { GiBlood } from 'react-icons/gi';
@@ -11,7 +12,7 @@ import {
   FaSignOutAlt, FaBars, FaTimes, FaChevronDown,
   FaHeart, FaHospital, FaCog, FaTint, FaBell,
   FaCheck, FaTrash, FaComment, FaCheckCircle,
-  FaTrophy, FaEnvelopeOpen
+  FaTrophy, FaEnvelopeOpen, FaMoon, FaSun, FaGlobe
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
@@ -21,21 +22,23 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 export default function Navbar() {
   const { user, token, logout } = useAuth();
-  const { 
-    notifications, 
-    unreadCount, 
-    setNotifications, 
-    setUnreadCount 
-  } = useSocket();
+  const { notifications, unreadCount, setNotifications, setUnreadCount } = useSocket();
   const router = useRouter();
   const pathname = usePathname();
+  
+  // Theme & Language
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  const [lang, setLang] = useState('en'); // en = English, bn = Bangla
+
   const [isOpen, setIsOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const notifRef = useRef(null);
 
-  // Scroll detection
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
@@ -43,14 +46,12 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Close menus on route change
   useEffect(() => {
     setIsOpen(false);
     setIsDropdownOpen(false);
     setIsNotifOpen(false);
   }, [pathname]);
 
-  // Close on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (isNotifOpen && notifRef.current && !notifRef.current.contains(e.target)) {
@@ -72,10 +73,10 @@ export default function Navbar() {
   };
 
   const navLinks = [
-    { href: '/', label: 'Home', icon: FaHome },
-    { href: '/about', label: 'About', icon: FaInfoCircle },
-    { href: '/donors', label: 'Find Donors', icon: FaTint },
-    { href: '/contact', label: 'Contact', icon: FaPhone },
+    { href: '/', label: lang === 'en' ? 'Home' : 'হোম', icon: FaHome },
+    { href: '/about', label: lang === 'en' ? 'About' : 'সম্পর্কে', icon: FaInfoCircle },
+    { href: '/donors', label: lang === 'en' ? 'Find Donors' : 'ডোনার খুঁজুন', icon: FaTint },
+    { href: '/contact', label: lang === 'en' ? 'Contact' : 'যোগাযোগ', icon: FaPhone },
   ];
 
   const getDashboardLink = () => {
@@ -88,97 +89,65 @@ export default function Navbar() {
     return pathname.startsWith(href);
   };
 
-  // 🔔 Handle notification click
   const handleNotificationClick = async (notif) => {
     try {
       if (!notif.read && token) {
-        await axios.put(
-          `${API_URL}/notifications/${notif._id}/read`,
-          {},
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        setNotifications(prev =>
-          prev.map(n => n._id === notif._id ? { ...n, read: true } : n)
-        );
+        await axios.put(`${API_URL}/notifications/${notif._id}/read`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setNotifications(prev => prev.map(n => n._id === notif._id ? { ...n, read: true } : n));
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
-
       if (notif.link) {
         router.push(notif.link);
         setIsNotifOpen(false);
       }
     } catch (error) {
-      console.error('Notification click error:', error);
+      console.error(error);
     }
   };
 
   const markAllAsRead = async (e) => {
     e.stopPropagation();
     if (!token || unreadCount === 0) return;
-
     try {
-      await axios.put(
-        `${API_URL}/notifications/read-all`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
+      await axios.put(`${API_URL}/notifications/read-all`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
       toast.success('All marked as read');
     } catch (error) {
-      toast.error('Failed to mark all as read');
+      toast.error('Failed');
     }
   };
 
   const deleteNotification = async (id, e) => {
     e.stopPropagation();
     if (!token) return;
-
     try {
       await axios.delete(`${API_URL}/notifications/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      const deleted = notifications.find(n => n._id === id);
       setNotifications(prev => prev.filter(n => n._id !== id));
-      if (deleted && !deleted.read) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
+      const deleted = notifications.find(n => n._id === id);
+      if (deleted && !deleted.read) setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
-      toast.error('Failed to delete');
+      toast.error('Failed');
     }
   };
 
-  const getNotificationIcon = (type) => {
-    const icons = {
-      message: { Icon: FaComment, color: 'bg-blue-100 text-blue-600' },
-      blood_request: { Icon: FaHeart, color: 'bg-red-100 text-red-600' },
-      request_fulfilled: { Icon: FaCheckCircle, color: 'bg-green-100 text-green-600' },
-      donation: { Icon: GiBlood, color: 'bg-red-100 text-red-600' },
-      system: { Icon: FaTrophy, color: 'bg-yellow-100 text-yellow-600' },
-    };
-    return icons[type] || icons.system;
-  };
-
   const formatTime = (date) => {
-    const now = new Date();
-    const past = new Date(date);
-    const diff = Math.floor((now - past) / 1000);
-
+    const diff = Math.floor((new Date() - new Date(date)) / 1000);
     if (diff < 60) return 'Just now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-    return past.toLocaleDateString();
+    return `${Math.floor(diff / 86400)}d ago`;
   };
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-      scrolled 
-        ? 'bg-white/95 backdrop-blur-md shadow-lg' 
-        : 'bg-white/90 backdrop-blur-sm'
+      scrolled ? 'bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-lg' : 'bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm'
     }`}>
       <div className="container-custom">
         <div className="flex items-center justify-between h-20">
@@ -186,144 +155,88 @@ export default function Navbar() {
           <Link href="/" className="flex items-center space-x-3 group flex-shrink-0">
             <div className="relative">
               <GiBlood className="w-10 h-10 text-red-600 blood-drop-animation" />
-              <GiBlood className="w-6 h-6 text-red-400 absolute -top-1 -right-1 blood-drop-animation-delayed opacity-50" />
             </div>
             <div className="hidden sm:block">
-              <span className="text-2xl font-extrabold gradient-text">BloodLink</span>
-              <span className="block text-xs text-gray-500 -mt-1">Save Lives</span>
+              <span className="text-2xl font-extrabold gradient-text dark:text-red-500">BloodLink</span>
+              <span className="block text-xs text-gray-500 dark:text-gray-400 -mt-1">Save Lives</span>
             </div>
           </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center space-x-8">
+          {/* Desktop Nav */}
+          <div className="hidden lg:flex items-center space-x-6">
             {navLinks.map((link) => {
               const Icon = link.icon;
               const active = isActiveLink(link.href);
               return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`flex items-center space-x-2 transition-colors duration-200 font-medium group ${
-                    active ? 'text-red-600' : 'text-gray-700 hover:text-red-600'
-                  }`}
-                >
-                  <Icon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                <Link key={link.href} href={link.href} className={`flex items-center space-x-2 font-medium ${
+                  active ? 'text-red-600' : 'text-gray-700 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-500'
+                }`}>
+                  <Icon className="w-4 h-4" />
                   <span>{link.label}</span>
                 </Link>
               );
             })}
 
+            {/* Theme & Lang Toggle */}
+            {mounted && (
+              <div className="flex items-center space-x-1 border-x border-gray-200 dark:border-gray-700 px-2">
+                <button
+                  onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-700 dark:text-gray-300"
+                >
+                  {resolvedTheme === 'dark' ? <FaSun className="w-4 h-4 text-yellow-400" /> : <FaMoon className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => setLang(lang === 'en' ? 'bn' : 'en')}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-sm font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1"
+                >
+                  <FaGlobe className="w-3 h-3" /> {lang === 'en' ? 'EN' : 'বাং'}
+                </button>
+              </div>
+            )}
+
             {user ? (
               <div className="flex items-center space-x-2">
-                {/* 🔔 Notification Bell */}
+                {/* Notification Bell */}
                 <div className="relative" ref={notifRef}>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsNotifOpen(!isNotifOpen);
-                      setIsDropdownOpen(false);
-                    }}
-                    className="relative p-2.5 hover:bg-red-50 rounded-full transition-colors"
-                    aria-label="Notifications"
+                    onClick={(e) => { e.stopPropagation(); setIsNotifOpen(!isNotifOpen); setIsDropdownOpen(false); }}
+                    className="relative p-2.5 hover:bg-red-50 dark:hover:bg-gray-800 rounded-full text-gray-700 dark:text-gray-300"
                   >
-                    <FaBell className="w-5 h-5 text-gray-700" />
+                    <FaBell className="w-5 h-5" />
                     {unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                      <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-gray-900">
                         {unreadCount > 99 ? '99+' : unreadCount}
                       </span>
                     )}
                   </button>
-
-                  {/* Notifications Dropdown */}
                   <AnimatePresence>
                     {isNotifOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute right-0 mt-2 w-96 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
-                      >
-                        {/* Header */}
-                        <div className="p-3 border-b bg-gradient-to-r from-red-50 to-pink-50 flex items-center justify-between">
-                          <div>
-                            <h3 className="font-bold text-gray-800 text-sm">Notifications</h3>
-                            {unreadCount > 0 && (
-                              <p className="text-xs text-red-600">{unreadCount} unread</p>
-                            )}
-                          </div>
+                      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                        className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                        <div className="p-3 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-between">
+                          <h3 className="font-bold text-sm">Notifications</h3>
                           {unreadCount > 0 && (
-                            <button
-                              onClick={markAllAsRead}
-                              className="text-xs text-red-600 hover:text-red-700 font-medium flex items-center gap-1"
-                            >
-                              <FaCheck className="w-3 h-3" />
-                              Mark all read
-                            </button>
+                            <button onClick={markAllAsRead} className="text-xs text-red-600 hover:underline">Mark all read</button>
                           )}
                         </div>
-
-                        {/* List */}
-                        <div className="max-h-96 overflow-y-auto">
+                        <div className="max-h-80 overflow-y-auto">
                           {notifications.length === 0 ? (
-                            <div className="text-center py-12">
-                              <FaEnvelopeOpen className="w-12 h-12 text-gray-200 mx-auto mb-2" />
-                              <p className="text-gray-500 text-sm font-medium">No notifications</p>
-                              <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
-                            </div>
+                            <p className="text-center py-6 text-sm text-gray-500">No notifications</p>
                           ) : (
-                            notifications.slice(0, 10).map((notif) => {
-                              const { Icon, color } = getNotificationIcon(notif.type);
-                              return (
-                                <div
-                                  key={notif._id}
-                                  onClick={() => handleNotificationClick(notif)}
-                                  className={`p-3 border-b hover:bg-gray-50 cursor-pointer transition-colors flex gap-3 group relative ${
-                                    !notif.read ? 'bg-red-50/30' : ''
-                                  }`}
-                                >
-                                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${color}`}>
-                                    <Icon className="w-4 h-4" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-gray-800 text-sm">
-                                      {notif.title}
-                                    </p>
-                                    <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
-                                      {notif.message}
-                                    </p>
-                                    <p className="text-[10px] text-gray-400 mt-1">
-                                      {formatTime(notif.createdAt)}
-                                    </p>
-                                  </div>
-                                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                    {!notif.read && (
-                                      <span className="w-2 h-2 bg-red-600 rounded-full"></span>
-                                    )}
-                                    <button
-                                      onClick={(e) => deleteNotification(notif._id, e)}
-                                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded text-gray-400 hover:text-red-600 transition-all"
-                                      aria-label="Delete"
-                                    >
-                                      <FaTrash className="w-3 h-3" />
-                                    </button>
-                                  </div>
+                            notifications.slice(0, 10).map((notif) => (
+                              <div key={notif._id} onClick={() => handleNotificationClick(notif)}
+                                className={`p-3 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer flex gap-3 ${!notif.read ? 'bg-red-50/50 dark:bg-red-900/10' : ''}`}>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-sm truncate">{notif.title}</p>
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{notif.message}</p>
+                                  <p className="text-[10px] text-gray-400 mt-1">{formatTime(notif.createdAt)}</p>
                                 </div>
-                              );
-                            })
+                                <button onClick={(e) => deleteNotification(notif._id, e)} className="text-gray-400 hover:text-red-600"><FaTrash className="w-3 h-3"/></button>
+                              </div>
+                            ))
                           )}
                         </div>
-
-                        {/* Footer */}
-                        {notifications.length > 0 && (
-                          <Link
-                            href="/notifications"
-                            onClick={() => setIsNotifOpen(false)}
-                            className="block p-3 text-center text-red-600 hover:bg-red-50 text-sm font-medium border-t"
-                          >
-                            View all notifications →
-                          </Link>
-                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -331,95 +244,28 @@ export default function Navbar() {
 
                 {/* Profile Dropdown */}
                 <div className="relative profile-dropdown">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsDropdownOpen(!isDropdownOpen);
-                      setIsNotifOpen(false);
-                    }}
-                    className="flex items-center space-x-3 bg-red-50 hover:bg-red-100 rounded-full px-3 py-2 transition-colors"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {user.profileImage ? (
-                        <img 
-                          src={user.profileImage} 
-                          alt={user.name} 
-                          className="w-full h-full object-cover" 
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <span className="text-white font-bold text-sm">
-                          {user.name?.charAt(0).toUpperCase()}
-                        </span>
-                      )}
+                  <button onClick={(e) => { e.stopPropagation(); setIsDropdownOpen(!isDropdownOpen); setIsNotifOpen(false); }}
+                    className="flex items-center space-x-2 bg-red-50 dark:bg-gray-800 hover:bg-red-100 dark:hover:bg-gray-700 rounded-full px-3 py-2">
+                    <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center overflow-hidden">
+                      {user.profileImage ? <img src={user.profileImage} alt="" className="w-full h-full object-cover" /> : <span className="text-white font-bold text-sm">{user.name?.charAt(0)}</span>}
                     </div>
-                    <span className="font-medium text-gray-700 max-w-[100px] truncate">
-                      {user.name?.split(' ')[0]}
-                    </span>
-                    <FaChevronDown className={`w-3 h-3 text-gray-500 transition-transform duration-200 ${
-                      isDropdownOpen ? 'rotate-180' : ''
-                    }`} />
+                    <span className="font-medium text-gray-700 dark:text-gray-200 max-w-[80px] truncate">{user.name?.split(' ')[0]}</span>
+                    <FaChevronDown className="w-3 h-3 text-gray-500" />
                   </button>
-
                   <AnimatePresence>
                     {isDropdownOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100"
-                      >
-                        <div className="p-4 border-b bg-gradient-to-r from-red-50 to-pink-50">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                              {user.profileImage ? (
-                                <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="text-white font-bold">
-                                  {user.name?.charAt(0).toUpperCase()}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-800 truncate">{user.name}</p>
-                              <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                            </div>
-                          </div>
-                          <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                            user.role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                            user.role === 'hospital' ? 'bg-blue-100 text-blue-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {user.role}
-                          </span>
+                      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                        className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border dark:border-gray-700 overflow-hidden">
+                        <div className="p-4 border-b dark:border-gray-700">
+                          <p className="font-semibold text-sm truncate">{user.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         </div>
                         <div className="p-2">
-                          <Link
-                            href={getDashboardLink()}
-                            className="flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-red-50 transition-colors text-gray-700"
-                            onClick={() => setIsDropdownOpen(false)}
-                          >
-                            <FaUser className="w-4 h-4 text-red-600" />
-                            <span className="font-medium">Dashboard</span>
+                          <Link href={getDashboardLink()} onClick={() => setIsDropdownOpen(false)} className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-sm">
+                            <FaUser className="text-red-600" /> <span>Dashboard</span>
                           </Link>
-                          <Link
-                            href="/profile"
-                            className="flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-red-50 transition-colors text-gray-700"
-                            onClick={() => setIsDropdownOpen(false)}
-                          >
-                            <FaCog className="w-4 h-4 text-red-600" />
-                            <span className="font-medium">Profile Settings</span>
-                          </Link>
-                          <div className="border-t my-2"></div>
-                          <button
-                            onClick={handleLogout}
-                            className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
-                          >
-                            <FaSignOutAlt className="w-4 h-4" />
-                            <span className="font-medium">Logout</span>
+                          <button onClick={handleLogout} className="w-full flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 text-sm mt-1">
+                            <FaSignOutAlt /> <span>Logout</span>
                           </button>
                         </div>
                       </motion.div>
@@ -429,155 +275,49 @@ export default function Navbar() {
               </div>
             ) : (
               <div className="flex items-center space-x-3">
-                <Link href="/login" className="btn-outline text-sm py-2 px-4">
-                  Sign In
-                </Link>
-                <Link href="/register" className="btn-primary text-sm py-2 px-4">
-                  Register
-                </Link>
+                <Link href="/login" className="btn-outline text-sm py-2 px-4 dark:border-gray-600 dark:text-gray-300">Sign In</Link>
+                <Link href="/register" className="btn-primary text-sm py-2 px-4">Register</Link>
               </div>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="lg:hidden flex items-center space-x-2">
-            {/* Mobile Notification Bell */}
-            {user && (
-              <Link
-                href="/notifications"
-                className="relative p-2 hover:bg-red-50 rounded-full transition-colors"
-              >
-                <FaBell className="w-5 h-5 text-gray-700" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-0.5 right-0.5 min-w-[16px] h-[16px] px-1 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </Link>
+          {/* Mobile Toggle */}
+          <div className="lg:hidden flex items-center space-x-2 text-gray-700 dark:text-gray-300">
+            {mounted && (
+              <button onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} className="p-2">
+                {resolvedTheme === 'dark' ? <FaSun /> : <FaMoon />}
+              </button>
             )}
-
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="p-2 rounded-lg hover:bg-red-50 transition-colors"
-              aria-label="Toggle menu"
-            >
-              {isOpen ? (
-                <FaTimes className="w-6 h-6 text-red-600" />
-              ) : (
-                <FaBars className="w-6 h-6 text-gray-700" />
-              )}
+            <button onClick={() => setIsOpen(!isOpen)} className="p-2">
+              {isOpen ? <FaTimes className="w-6 h-6" /> : <FaBars className="w-6 h-6" />}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile Navigation */}
+      {/* Mobile Menu */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="lg:hidden bg-white border-t overflow-hidden shadow-lg"
-          >
-            <div className="container-custom py-4 space-y-1">
-              {user && (
-                <div className="flex items-center space-x-3 p-4 bg-red-50 rounded-xl mb-3">
-                  <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {user.profileImage ? (
-                      <img src={user.profileImage} alt={user.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-white font-bold text-lg">
-                        {user.name?.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 truncate">{user.name}</p>
-                    <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-                  </div>
-                </div>
-              )}
-
-              {navLinks.map((link) => {
-                const Icon = link.icon;
-                const active = isActiveLink(link.href);
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                      active 
-                        ? 'bg-red-50 text-red-600' 
-                        : 'hover:bg-red-50 text-gray-700'
-                    }`}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <Icon className="w-5 h-5 text-red-600" />
-                    <span className="font-medium">{link.label}</span>
-                  </Link>
-                );
-              })}
-
+          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="lg:hidden bg-white dark:bg-gray-900 border-t dark:border-gray-800 overflow-hidden">
+            <div className="p-4 space-y-2">
+              {navLinks.map((link) => (
+                <Link key={link.href} href={link.href} onClick={() => setIsOpen(false)} className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <link.icon className="text-red-600" /> <span>{link.label}</span>
+                </Link>
+              ))}
               {user ? (
                 <>
-                  <Link
-                    href="/notifications"
-                    className="flex items-center justify-between px-4 py-3 rounded-lg hover:bg-red-50 transition-colors text-gray-700"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <FaBell className="w-5 h-5 text-red-600" />
-                      <span className="font-medium">Notifications</span>
-                    </div>
-                    {unreadCount > 0 && (
-                      <span className="bg-red-600 text-white text-xs rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center font-bold">
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                      </span>
-                    )}
+                  <Link href={getDashboardLink()} onClick={() => setIsOpen(false)} className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <FaUser className="text-red-600" /> <span>Dashboard</span>
                   </Link>
-                  <Link
-                    href={getDashboardLink()}
-                    className="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors text-gray-700"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <FaUser className="w-5 h-5 text-red-600" />
-                    <span className="font-medium">Dashboard</span>
-                  </Link>
-                  <Link
-                    href="/profile"
-                    className="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 transition-colors text-gray-700"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    <FaCog className="w-5 h-5 text-red-600" />
-                    <span className="font-medium">Profile Settings</span>
-                  </Link>
-                  <div className="border-t my-2"></div>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
-                  >
-                    <FaSignOutAlt className="w-5 h-5" />
-                    <span className="font-medium">Logout</span>
+                  <button onClick={handleLogout} className="w-full flex items-center space-x-3 p-3 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                    <FaSignOutAlt /> <span>Logout</span>
                   </button>
                 </>
               ) : (
-                <div className="flex flex-col space-y-2 pt-3 border-t">
-                  <Link
-                    href="/login"
-                    className="btn-outline w-full text-center py-3"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Sign In
-                  </Link>
-                  <Link
-                    href="/register"
-                    className="btn-primary w-full text-center py-3"
-                    onClick={() => setIsOpen(false)}
-                  >
-                    Register
-                  </Link>
+                <div className="flex flex-col space-y-2 mt-4 pt-4 border-t dark:border-gray-800">
+                  <Link href="/login" className="btn-outline w-full text-center py-2">Sign In</Link>
+                  <Link href="/register" className="btn-primary w-full text-center py-2">Register</Link>
                 </div>
               )}
             </div>
