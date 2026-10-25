@@ -33,8 +33,9 @@ app.use(express.json());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 100 : 10000,
+  message: { error: 'Too many requests from this IP, please try again later.' }
 });
 app.use('/api/', limiter);
 
@@ -477,6 +478,8 @@ app.post('/api/auth/upload-profile', auth, upload.single('profileImage'), async 
   }
 });
 
+
+
 // ==================== DONOR ROUTES (Blood Give) ====================
 
 // 1️⃣ Donor donates blood
@@ -553,6 +556,30 @@ app.post('/api/donor/donate', auth, authorize('donor'), async (req, res) => {
   } catch (error) {
     console.error('Donation error:', error);
     res.status(500).json({ error: 'Failed to process donation' });
+  }
+});
+// 1. Leaderboard Endpoint
+app.get('/api/donors/leaderboard', auth, async (req, res) => {
+  try {
+    const topDonors = await db.collection('users')
+      .find({ role: 'donor' })
+      .sort({ donationCount: -1 })
+      .limit(10)
+      .project({ name: 1, donationCount: 1, profileImage: 1, bloodGroup: 1 })
+      .toArray();
+
+    const withBadges = topDonors.map(d => {
+      let badge = { level: 'Newbie', icon: '🩸', color: 'text-red-500' };
+      if (d.donationCount >= 10) badge = { level: 'Gold', icon: '🥇', color: 'text-yellow-500' };
+      else if (d.donationCount >= 5) badge = { level: 'Silver', icon: '🥈', color: 'text-gray-400' };
+      else if (d.donationCount >= 1) badge = { level: 'Bronze', icon: '🥉', color: 'text-orange-500' };
+      
+      return { ...d, badge };
+    });
+
+    res.json({ success: true, donors: withBadges });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load leaderboard' });
   }
 });
 
@@ -687,6 +714,25 @@ app.get('/api/donors', auth, async (req, res) => {
     console.error('Get donors error:', error);
     res.status(500).json({ error: 'Failed to get donors' });
   }
+});
+
+// 1. Create Appointment Route
+app.post('/api/appointments', auth, async (req, res) => {
+  const { bloodBankId, date, timeSlot } = req.body;
+  const appointment = {
+    donorId: req.userId,
+    donorName: req.user.name,
+    bloodBankId: new ObjectId(bloodBankId),
+    date,
+    timeSlot,
+    status: 'pending', // pending, approved, completed
+    createdAt: new Date()
+  };
+  await db.collection('appointments').insertOne(appointment);
+  
+  // Notify Blood Bank (Optional)
+  io.emit('newAppointment', appointment);
+  res.status(201).json({ success: true, message: 'Appointment booked!' });
 });
 
 // ==================== START CONVERSATION ====================
