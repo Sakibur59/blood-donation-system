@@ -11,7 +11,8 @@ import {
   FaUsers, FaHospital, FaTint, FaHeart,
   FaClipboardList, FaChartLine, FaDatabase,
   FaHandHoldingHeart, FaPlus, FaHistory,
-  FaCommentDots
+  FaCommentDots,
+  FaCalendarCheck
 } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -65,6 +66,7 @@ export default function DashboardLayout({ children }) {
           { href: '/admin/dashboard', icon: FaHome, label: 'Dashboard' },
           { href: '/admin/users', icon: FaUsers, label: 'Manage Users' },
           { href: '/admin/blood-banks', icon: FaHospital, label: 'Blood Banks' },
+           { href: '/admin/appointments', icon: FaCalendarCheck, label: 'Appointments' },
           { href: '/admin/requests', icon: FaClipboardList, label: 'All Requests' },
           { href: '/admin/donations', icon: FaHistory, label: 'Donations' },
           { href: '/admin/statistics', icon: FaChartLine, label: 'Statistics' },
