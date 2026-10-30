@@ -3,8 +3,8 @@ import { getAuth } from "firebase/auth";
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyABal6qOU940H4S1wsntgSH-H1mepbrYd4",
-  authDomain: "bloodlink-aa91d.firebaseapp.com",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: "bloodlink-aa91d",
   storageBucket: "bloodlink-aa91d.firebasestorage.app",
   messagingSenderId: "188744086767",
