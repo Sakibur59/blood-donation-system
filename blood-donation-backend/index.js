@@ -1728,6 +1728,48 @@ app.get('/api/admin/statistics', auth, authorize('admin'), async (req, res) => {
     res.status(500).json({ error: 'Failed to get statistics' });
   }
 });
+// ==================== APPOINTMENTS ====================
+
+// Admin: Get all appointments
+app.get('/api/admin/appointments', auth, authorize('admin'), async (req, res) => {
+  try {
+    const appointments = await db.collection('appointments')
+      .find()
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // Get Blood Bank and Donor details
+    const apptsWithDetails = await Promise.all(appointments.map(async (appt) => {
+      const donor = await db.collection('users').findOne(
+        { _id: new ObjectId(appt.donorId) },
+        { projection: { name: 1, phone: 1, bloodGroup: 1 } }
+      );
+      const bank = await db.collection('blood_banks').findOne(
+        { _id: new ObjectId(appt.bloodBankId) },
+        { projection: { name: 1, address: 1 } }
+      );
+      return { ...appt, donor, bank };
+    }));
+
+    res.json({ success: true, appointments: apptsWithDetails });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get appointments' });
+  }
+});
+
+// Admin: Update appointment status (approve/cancel)
+app.put('/api/admin/appointments/:id', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    await db.collection('appointments').updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { status, updatedAt: new Date() } }
+    );
+    res.json({ success: true, message: 'Appointment updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update appointment' });
+  }
+});
 
 // ==================== BLOOD BANK PUBLIC ROUTES ====================
 
