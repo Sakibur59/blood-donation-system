@@ -11,6 +11,8 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const axios = require('axios');
 const FormData = require('form-data');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 dotenv.config();
 
@@ -436,6 +438,100 @@ app.get('/api/auth/me', auth, async (req, res) => {
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await db.collection('users').findOne({ email });
+
+    if (!user) {
+   
+      return res.json({ success: true, message: 'If an account exists, a reset link has been sent.' });
+    }
+
+  
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 15 * 60 * 1000); 
+
+   
+    await db.collection('users').updateOne(
+      { _id: user._id },
+      { $set: { resetToken, resetTokenExpiry } }
+    );
+
+  
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'BloodLink - Password Reset Request',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h2 style="color: #dc2626;">🩸 BloodLink</h2>
+          <h3>Password Reset Request</h3>
+          <p>Hello ${user.name},</p>
+          <p>You requested to reset your password. Click the button below to set a new password. This link is valid for <b>15 minutes</b>.</p>
+          <a href="${resetLink}" style="display: inline-block; padding: 12px 24px; background-color: #dc2626; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0;">Reset Password</a>
+          <p>If you didn't request this, please ignore this email.</p>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ success: true, message: 'Password reset link sent to your email.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to send reset email' });
+  }
+});
+
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token and new password required' });
+    }
+
+   
+    const user = await db.collection('users').findOne({
+      resetToken: token,
+      resetTokenExpiry: { $gt: new Date() } 
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+  
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    
+    await db.collection('users').updateOne(
+      { _id: user._id },
+      {
+        $set: { password: hashedPassword },
+        $unset: { resetToken: "", resetTokenExpiry: "" }
+      }
+    );
+
+    res.json({ success: true, message: 'Password reset successful. You can now login.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
   }
 });
 
