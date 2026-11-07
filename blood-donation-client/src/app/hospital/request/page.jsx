@@ -72,34 +72,46 @@ function NewRequestContent() {
   ];
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!formData.bloodGroup) {
-      toast.error('Please select a blood group');
-      return;
-    }
+  // ব্রাউজারের লোকেশন চেক করা
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
 
-    try {
-      setLoading(true);
-      const storedToken = localStorage.getItem('token');
+        const requestData = {
+          ...formData,
+          location: { 
+            type: 'Point', 
+            coordinates: [lng, lat] // MongoDB GeoJSON ফরম্যাট
+          } 
+        };
 
-      const res = await axios.post(
-        `${API_URL}/hospital/request`,
-        formData,
-        { headers: { Authorization: `Bearer ${storedToken}` } }
-      );
-
-      toast.success(res.data.message || 'Request created successfully!', {
-        duration: 4000,
-        icon: '🩸'
-      });
-      setTimeout(() => router.push('/hospital/my-requests'), 1200);
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'Failed to create request');
-    } finally {
-      setLoading(false);
-    }
-  };
+        try {
+          setLoading(true);
+          const storedToken = localStorage.getItem('token');
+          await axios.post(`${API_URL}/hospital/request`, requestData, {
+            headers: { Authorization: `Bearer ${storedToken}` }
+          });
+          toast.success('Request created with location!');
+          setTimeout(() => router.push('/hospital/my-requests'), 1000);
+        } catch (error) {
+          toast.error(error.response?.data?.error || 'Failed to create request');
+        } finally {
+          setLoading(false);
+        }
+      },
+      (error) => {
+        toast.error('Please allow location access to create a request.');
+        setLoading(false);
+      }
+    );
+  } else {
+    toast.error('Geolocation is not supported by your browser.');
+  }
+};
 
   return (
     <DashboardLayout>

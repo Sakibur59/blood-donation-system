@@ -1,22 +1,34 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useSocket } from '../../context/SocketContext';
-import RoleGuard from '../../components/RoleGuard';
-import DashboardLayout from '../../components/DashboardLayout';
-import ChatWidget from '../../components/ChatWidget';
-import Modal from '../../components/Modal';
-import { GiBlood } from 'react-icons/gi';
-import { 
-  FaHeart, FaClock, FaCheckCircle, FaHospital, 
-  FaHandHoldingHeart, FaTrophy, FaCalendarCheck, FaCalendarPlus
-} from 'react-icons/fa';
-import Link from 'next/link';
-import axios from 'axios';
-import toast from 'react-hot-toast';
+import { useEffect, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { useSocket } from "../../context/SocketContext";
+import RoleGuard from "../../components/RoleGuard";
+import DashboardLayout from "../../components/DashboardLayout";
+import ChatWidget from "../../components/ChatWidget";
+import Modal from "../../components/Modal";
+import { GiBlood } from "react-icons/gi";
+import {
+  FaHeart,
+  FaClock,
+  FaCheckCircle,
+  FaHospital,
+  FaHandHoldingHeart,
+  FaTrophy,
+  FaCalendarCheck,
+  FaCalendarPlus,
+} from "react-icons/fa";
+import Link from "next/link";
+import axios from "axios";
+import toast from "react-hot-toast";
+import dynamic from "next/dynamic";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const RequestMap = dynamic(() => import('../../components/RequestMap'), { 
+  ssr: false,
+  loading: () => <div className="h-[400px] w-full bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-500">Loading Map...</div>
+});
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 function DonorDashboardContent() {
   const { user, token } = useAuth();
@@ -25,7 +37,7 @@ function DonorDashboardContent() {
     totalDonations: 0,
     lastDonation: null,
     nextEligibleDate: null,
-    bloodGroups: {}
+    bloodGroups: {},
   });
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +48,11 @@ function DonorDashboardContent() {
   // 📅 Appointment State
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
   const [bloodBanks, setBloodBanks] = useState([]);
-  const [apptData, setApptData] = useState({ bloodBankId: '', date: '', timeSlot: '10:00 AM' });
+  const [apptData, setApptData] = useState({
+    bloodBankId: "",
+    date: "",
+    timeSlot: "10:00 AM",
+  });
   const [bookingAppt, setBookingAppt] = useState(false);
 
   useEffect(() => {
@@ -52,7 +68,7 @@ function DonorDashboardContent() {
     const handleNewRequest = (request) => {
       toast.success(`🩸 New ${request.bloodGroup} blood request!`, {
         duration: 6000,
-        icon: '🩸',
+        icon: "🩸",
       });
       fetchData();
     };
@@ -61,14 +77,14 @@ function DonorDashboardContent() {
       fetchData();
     };
 
-    socket.on('newBloodRequest', handleNewRequest);
-    socket.on('requestFulfilled', handleRequestUpdate);
-    socket.on('requestUpdated', handleRequestUpdate);
+    socket.on("newBloodRequest", handleNewRequest);
+    socket.on("requestFulfilled", handleRequestUpdate);
+    socket.on("requestUpdated", handleRequestUpdate);
 
     return () => {
-      socket.off('newBloodRequest', handleNewRequest);
-      socket.off('requestFulfilled', handleRequestUpdate);
-      socket.off('requestUpdated', handleRequestUpdate);
+      socket.off("newBloodRequest", handleNewRequest);
+      socket.off("requestFulfilled", handleRequestUpdate);
+      socket.off("requestUpdated", handleRequestUpdate);
     };
   }, [socket]);
 
@@ -79,25 +95,25 @@ function DonorDashboardContent() {
       // ✅ Donor-specific endpoints use করুন
       const [statsRes, requestsRes] = await Promise.all([
         axios.get(`${API_URL}/donor/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         }),
         axios.get(`${API_URL}/donor/pending-requests`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
 
       setStats(statsRes.data);
       setRequests(requestsRes.data.requests || []);
     } catch (error) {
-      console.error('Fetch error:', error);
-      
+      console.error("Fetch error:", error);
+
       // Error message handle
       if (error.response?.status === 403) {
-        toast.error('Access denied. Please login again.');
+        toast.error("Access denied. Please login again.");
       } else if (error.response?.status === 401) {
-        toast.error('Session expired. Please login.');
+        toast.error("Session expired. Please login.");
       } else {
-        toast.error('Failed to load data');
+        toast.error("Failed to load data");
       }
     } finally {
       setLoading(false);
@@ -108,10 +124,12 @@ function DonorDashboardContent() {
   const openApptModal = async () => {
     setIsApptModalOpen(true);
     try {
-      const res = await axios.get(`${API_URL}/blood-banks`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.get(`${API_URL}/blood-banks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setBloodBanks(res.data || []);
     } catch (error) {
-      toast.error('Failed to load blood banks');
+      toast.error("Failed to load blood banks");
     }
   };
 
@@ -119,12 +137,16 @@ function DonorDashboardContent() {
     e.preventDefault();
     try {
       setBookingAppt(true);
-      await axios.post(`${API_URL}/appointments`, apptData, { headers: { Authorization: `Bearer ${token}` } });
-      toast.success('Appointment booked successfully! Blood bank will confirm.');
+      await axios.post(`${API_URL}/appointments`, apptData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success(
+        "Appointment booked successfully! Blood bank will confirm.",
+      );
       setIsApptModalOpen(false);
-      setApptData({ bloodBankId: '', date: '', timeSlot: '10:00 AM' });
+      setApptData({ bloodBankId: "", date: "", timeSlot: "10:00 AM" });
     } catch (error) {
-      toast.error('Failed to book appointment');
+      toast.error("Failed to book appointment");
     } finally {
       setBookingAppt(false);
     }
@@ -132,27 +154,27 @@ function DonorDashboardContent() {
 
   const handleFulfillRequest = async (requestId) => {
     if (processing) return;
-    
+
     try {
       setProcessing(true);
-      
+
       await axios.put(
         `${API_URL}/hospital/request/${requestId}/fulfill`,
         {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-      
-      toast.success('Blood request fulfilled! You saved a life ❤️', {
+
+      toast.success("Blood request fulfilled! You saved a life ❤️", {
         duration: 5000,
-        icon: '🎉',
+        icon: "🎉",
       });
-      
+
       setIsModalOpen(false);
       setSelectedRequest(null);
       fetchData();
     } catch (error) {
-      console.error('Fulfill error:', error);
-      toast.error(error.response?.data?.error || 'Failed to fulfill request');
+      console.error("Fulfill error:", error);
+      toast.error(error.response?.data?.error || "Failed to fulfill request");
     } finally {
       setProcessing(false);
     }
@@ -179,7 +201,9 @@ function DonorDashboardContent() {
           <div className="text-center">
             <GiBlood className="w-12 h-12 text-red-600 blood-drop-animation mx-auto mb-4" />
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">
+              Loading dashboard...
+            </p>
           </div>
         </div>
       </DashboardLayout>
@@ -199,14 +223,16 @@ function DonorDashboardContent() {
               Welcome back, {user?.name}! 🩸
             </h1>
             <p className="text-red-100">
-              {canDonate() 
-                ? "You're eligible to donate blood. Save a life today!" 
-                : `Next eligible date: ${getNextEligibleDate()?.toLocaleDateString() || 'N/A'}`
-              }
+              {canDonate()
+                ? "You're eligible to donate blood. Save a life today!"
+                : `Next eligible date: ${getNextEligibleDate()?.toLocaleDateString() || "N/A"}`}
             </p>
           </div>
           {/* 📅 Appointment Button */}
-          <button onClick={openApptModal} className="relative z-10 bg-white text-red-600 hover:bg-red-50 px-5 py-2.5 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-transform hover:scale-105 whitespace-nowrap">
+          <button
+            onClick={openApptModal}
+            className="relative z-10 bg-white text-red-600 hover:bg-red-50 px-5 py-2.5 rounded-xl font-bold shadow-lg flex items-center gap-2 transition-transform hover:scale-105 whitespace-nowrap"
+          >
             <FaCalendarPlus /> Book Appointment
           </button>
         </div>
@@ -216,7 +242,9 @@ function DonorDashboardContent() {
           <div className="card dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Donations</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Total Donations
+                </p>
                 <p className="text-3xl font-bold text-red-600">
                   {stats.totalDonations || 0}
                 </p>
@@ -226,13 +254,14 @@ function DonorDashboardContent() {
               </div>
             </div>
           </div>
-
           <div className="card dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Blood Group</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Blood Group
+                </p>
                 <p className="text-3xl font-bold text-yellow-600">
-                  {user?.bloodGroup || 'N/A'}
+                  {user?.bloodGroup || "N/A"}
                 </p>
               </div>
               <div className="w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
@@ -244,7 +273,9 @@ function DonorDashboardContent() {
           <div className="card dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Lives Saved</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Lives Saved
+                </p>
                 <p className="text-3xl font-bold text-green-600">
                   {(stats.totalDonations || 0) * 3}
                 </p>
@@ -258,11 +289,15 @@ function DonorDashboardContent() {
           <div className="card dark:bg-gray-800 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Status</p>
-                <p className={`text-lg font-bold ${
-                  canDonate() ? 'text-green-600' : 'text-yellow-600'
-                }`}>
-                  {canDonate() ? '✅ Eligible' : '⏳ Wait'}
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Status
+                </p>
+                <p
+                  className={`text-lg font-bold ${
+                    canDonate() ? "text-green-600" : "text-yellow-600"
+                  }`}
+                >
+                  {canDonate() ? "✅ Eligible" : "⏳ Wait"}
                 </p>
               </div>
               <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -271,6 +306,13 @@ function DonorDashboardContent() {
             </div>
           </div>
         </div>
+
+        <div className="mb-6">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-3">
+              📍 Live Blood Requests Map
+            </h2>
+            <RequestMap requests={requests} />
+          </div>
 
         {/* Pending Blood Requests */}
         <div className="card dark:bg-gray-800 dark:border-gray-700">
@@ -287,13 +329,17 @@ function DonorDashboardContent() {
             {requests.length === 0 ? (
               <div className="text-center py-12">
                 <FaCheckCircle className="w-16 h-16 text-green-300 dark:text-green-900 mx-auto mb-3" />
-                <p className="text-gray-500 dark:text-gray-400 font-medium">All caught up!</p>
-                <p className="text-sm text-gray-400">No pending blood requests</p>
+                <p className="text-gray-500 dark:text-gray-400 font-medium">
+                  All caught up!
+                </p>
+                <p className="text-sm text-gray-400">
+                  No pending blood requests
+                </p>
               </div>
             ) : (
               requests.map((request) => (
-                <div 
-                  key={request._id} 
+                <div
+                  key={request._id}
                   className="border dark:border-gray-700 rounded-xl p-4 hover:border-red-300 dark:hover:border-red-500 hover:shadow-md transition-all dark:bg-gray-900"
                 >
                   <div className="flex flex-wrap justify-between items-start gap-3">
@@ -302,42 +348,58 @@ function DonorDashboardContent() {
                         <h3 className="font-semibold text-gray-800 dark:text-white">
                           {request.patientName}
                         </h3>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          request.urgency === 'emergency' ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200' :
-                          request.urgency === 'urgent' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200' :
-                          'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200'
-                        }`}>
-                          {request.urgency || 'normal'}
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            request.urgency === "emergency"
+                              ? "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200"
+                              : request.urgency === "urgent"
+                                ? "bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200"
+                                : "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+                          }`}
+                        >
+                          {request.urgency || "normal"}
                         </span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          request.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200' :
-                          request.status === 'fulfilled' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            request.status === "pending"
+                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200"
+                              : request.status === "fulfilled"
+                                ? "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200"
+                                : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                          }`}
+                        >
                           {request.status}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <div>
-                          <span className="text-gray-500 dark:text-gray-500">Blood:</span>
+                          <span className="text-gray-500 dark:text-gray-500">
+                            Blood:
+                          </span>
                           <span className="font-bold text-red-600 ml-1">
                             {request.bloodGroup}
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-500 dark:text-gray-500">Quantity:</span>
+                          <span className="text-gray-500 dark:text-gray-500">
+                            Quantity:
+                          </span>
                           <span className="font-medium ml-1">
                             {request.quantity} unit
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-500 dark:text-gray-500">Hospital:</span>
+                          <span className="text-gray-500 dark:text-gray-500">
+                            Hospital:
+                          </span>
                           <span className="font-medium ml-1">
                             {request.hospital || request.hospitalInfo?.name}
                           </span>
                         </div>
                         <div>
-                          <span className="text-gray-500 dark:text-gray-500">Contact:</span>
+                          <span className="text-gray-500 dark:text-gray-500">
+                            Contact:
+                          </span>
                           <span className="font-medium ml-1">
                             {request.contact}
                           </span>
@@ -357,7 +419,7 @@ function DonorDashboardContent() {
                       disabled={!canDonate()}
                       className="btn-primary text-sm px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
-                      {canDonate() ? 'Help Now' : 'Not Eligible'}
+                      {canDonate() ? "Help Now" : "Not Eligible"}
                     </button>
                   </div>
                 </div>
@@ -368,37 +430,49 @@ function DonorDashboardContent() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link 
+          <Link
             href="/donor/donate"
             className="card hover:border-red-300 dark:hover:border-red-500 dark:bg-gray-800 dark:border-gray-700 text-center group cursor-pointer"
           >
             <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
               <FaHandHoldingHeart className="w-6 h-6 text-red-600" />
             </div>
-            <h3 className="font-semibold text-gray-800 dark:text-white mb-1">Donate Blood</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Record a new donation</p>
+            <h3 className="font-semibold text-gray-800 dark:text-white mb-1">
+              Donate Blood
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Record a new donation
+            </p>
           </Link>
 
-          <Link 
+          <Link
             href="/donor/my-donations"
             className="card hover:border-red-300 dark:hover:border-red-500 dark:bg-gray-800 dark:border-gray-700 text-center group cursor-pointer"
           >
             <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
               <FaClock className="w-6 h-6 text-red-600" />
             </div>
-            <h3 className="font-semibold text-gray-800 dark:text-white mb-1">My Donations</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">View donation history</p>
+            <h3 className="font-semibold text-gray-800 dark:text-white mb-1">
+              My Donations
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              View donation history
+            </p>
           </Link>
 
-          <Link 
+          <Link
             href="/donor/blood-banks"
             className="card hover:border-red-300 dark:hover:border-red-500 dark:bg-gray-800 dark:border-gray-700 text-center group cursor-pointer"
           >
             <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
               <FaHospital className="w-6 h-6 text-red-600" />
             </div>
-            <h3 className="font-semibold text-gray-800 dark:text-white mb-1">Blood Banks</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Find nearby blood banks</p>
+            <h3 className="font-semibold text-gray-800 dark:text-white mb-1">
+              Blood Banks
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Find nearby blood banks
+            </p>
           </Link>
         </div>
       </div>
@@ -419,25 +493,26 @@ function DonorDashboardContent() {
             </p>
             <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-300">
               <p>
-                Blood: 
+                Blood:
                 <span className="font-bold text-red-600 ml-1">
                   {selectedRequest?.bloodGroup}
                 </span>
               </p>
               <p>
-                Quantity: 
+                Quantity:
                 <span className="font-semibold ml-1">
                   {selectedRequest?.quantity} unit
                 </span>
               </p>
               <p>
-                Hospital: 
+                Hospital:
                 <span className="font-medium ml-1">
-                  {selectedRequest?.hospital || selectedRequest?.hospitalInfo?.name}
+                  {selectedRequest?.hospital ||
+                    selectedRequest?.hospitalInfo?.name}
                 </span>
               </p>
               <p>
-                Contact: 
+                Contact:
                 <span className="font-medium ml-1">
                   {selectedRequest?.contact}
                 </span>
@@ -482,29 +557,66 @@ function DonorDashboardContent() {
       </Modal>
 
       {/* 📅 Appointment Modal */}
-      <Modal isOpen={isApptModalOpen} onClose={() => setIsApptModalOpen(false)} title="Book Blood Bank Appointment">
+      <Modal
+        isOpen={isApptModalOpen}
+        onClose={() => setIsApptModalOpen(false)}
+        title="Book Blood Bank Appointment"
+      >
         <form onSubmit={handleBookAppointment} className="space-y-4">
           <div>
-            <label className="input-label dark:text-gray-300">Select Blood Bank</label>
-            <select required value={apptData.bloodBankId} onChange={e => setApptData({...apptData, bloodBankId: e.target.value})} className="select-field dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+            <label className="input-label dark:text-gray-300">
+              Select Blood Bank
+            </label>
+            <select
+              required
+              value={apptData.bloodBankId}
+              onChange={(e) =>
+                setApptData({ ...apptData, bloodBankId: e.target.value })
+              }
+              className="select-field dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+            >
               <option value="">Choose a blood bank</option>
-              {bloodBanks.map(b => <option key={b._id} value={b._id}>{b.name} - {b.address}</option>)}
+              {bloodBanks.map((b) => (
+                <option key={b._id} value={b._id}>
+                  {b.name} - {b.address}
+                </option>
+              ))}
             </select>
           </div>
           <div>
             <label className="input-label dark:text-gray-300">Date</label>
-            <input type="date" required value={apptData.date} onChange={e => setApptData({...apptData, date: e.target.value})} className="input-field dark:bg-gray-800 dark:border-gray-600 dark:text-white" />
+            <input
+              type="date"
+              required
+              value={apptData.date}
+              onChange={(e) =>
+                setApptData({ ...apptData, date: e.target.value })
+              }
+              className="input-field dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+            />
           </div>
           <div>
             <label className="input-label dark:text-gray-300">Time Slot</label>
-            <select value={apptData.timeSlot} onChange={e => setApptData({...apptData, timeSlot: e.target.value})} className="select-field dark:bg-gray-800 dark:border-gray-600 dark:text-white">
+            <select
+              value={apptData.timeSlot}
+              onChange={(e) =>
+                setApptData({ ...apptData, timeSlot: e.target.value })
+              }
+              className="select-field dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+            >
               <option>10:00 AM</option>
               <option>12:00 PM</option>
               <option>02:00 PM</option>
               <option>04:00 PM</option>
             </select>
           </div>
-          <button type="submit" disabled={bookingAppt} className="btn-primary w-full">{bookingAppt ? 'Booking...' : 'Confirm Appointment'}</button>
+          <button
+            type="submit"
+            disabled={bookingAppt}
+            className="btn-primary w-full"
+          >
+            {bookingAppt ? "Booking..." : "Confirm Appointment"}
+          </button>
         </form>
       </Modal>
 
