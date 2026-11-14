@@ -17,15 +17,24 @@ import {
   FaTrophy,
   FaCalendarCheck,
   FaCalendarPlus,
+  FaDownload,
 } from "react-icons/fa";
 import Link from "next/link";
 import axios from "axios";
 import toast from "react-hot-toast";
 import dynamic from "next/dynamic";
+import { useRef } from "react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
+import CertificateTemplate from "@/app/components/CertificateTemplate";
 
-const RequestMap = dynamic(() => import('../../components/RequestMap'), { 
+const RequestMap = dynamic(() => import("../../components/RequestMap"), {
   ssr: false,
-  loading: () => <div className="h-[400px] w-full bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-500">Loading Map...</div>
+  loading: () => (
+    <div className="h-[400px] w-full bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center text-gray-500">
+      Loading Map...
+    </div>
+  ),
 });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
@@ -44,6 +53,7 @@ function DonorDashboardContent() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const certificateRef = useRef();
 
   // 📅 Appointment State
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
@@ -117,6 +127,23 @@ function DonorDashboardContent() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const downloadCertificate = async () => {
+    if (!certificateRef.current) return;
+    toast.loading("Generating Certificate...", { id: "pdf" });
+    try {
+      const canvas = await html2canvas(certificateRef.current, { scale: 2 });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("landscape", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`BloodLink_Certificate_${user.name}.pdf`);
+      toast.success("Certificate Downloaded!", { id: "pdf" });
+    } catch (error) {
+      toast.error("Failed to generate PDF", { id: "pdf" });
     }
   };
 
@@ -308,11 +335,11 @@ function DonorDashboardContent() {
         </div>
 
         <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-3">
-              📍 Live Blood Requests Map
-            </h2>
-            <RequestMap requests={requests} />
-          </div>
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-3">
+            📍 Live Blood Requests Map
+          </h2>
+          <RequestMap requests={requests} />
+        </div>
 
         {/* Pending Blood Requests */}
         <div className="card dark:bg-gray-800 dark:border-gray-700">
@@ -474,6 +501,12 @@ function DonorDashboardContent() {
               Find nearby blood banks
             </p>
           </Link>
+          <button
+            onClick={downloadCertificate}
+            className="btn-primary w-full flex items-center justify-center gap-2 py-3"
+          >
+            <FaDownload /> Download Certificate
+          </button>
         </div>
       </div>
 
@@ -622,9 +655,18 @@ function DonorDashboardContent() {
 
       {/* 💬 Floating Chat */}
       <ChatWidget />
+      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+  <CertificateTemplate 
+    ref={certificateRef} 
+    user={user} 
+    totalDonations={stats.totalDonations || 0} 
+  />
+</div>
     </DashboardLayout>
   );
+  
 }
+
 
 export default function DonorDashboard() {
   return (
