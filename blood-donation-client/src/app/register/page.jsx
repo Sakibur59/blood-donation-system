@@ -9,17 +9,13 @@ import {
   FaUser, FaEnvelope, FaLock, FaPhone, FaMapMarkerAlt, 
   FaCalendarAlt, FaEye, FaEyeSlash, FaUserMd, 
   FaHospital, FaCamera, FaCheckCircle, FaIdCard,
-  FaGlobe, FaShieldAlt
+  FaGlobe, FaShieldAlt, FaDatabase
 } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
-import { RecaptchaVerifier,signInWithPhoneNumber } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-
-// // ✅ Firebase Imports
-// import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
-// import { auth } from "../../lib/firebase"; // আপনার ফাইল পাথ অনুযায়ী ঠিক করুন
+import { RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export default function Register() {
   const [step, setStep] = useState('role'); // 'role' or 'form'
@@ -34,7 +30,7 @@ export default function Register() {
   const [profileImage, setProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   
-  // ✅ OTP State
+  // OTP State
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -77,11 +73,9 @@ export default function Register() {
     }
   };
 
-  // ✅ OTP পাঠানোর ফাংশন
   const handleSendOTP = async (e) => {
     e.preventDefault();
 
-    // Basic Validation before OTP
     if (formData.password !== formData.confirmPassword) {
       return toast.error('Passwords do not match');
     }
@@ -91,10 +85,9 @@ export default function Register() {
     if (formData.role === 'donor' && !formData.bloodGroup) {
       return toast.error('Please select your blood group');
     }
-    if (formData.role === 'hospital' && !formData.hospitalName) {
-      return toast.error('Please enter hospital name');
+    if ((formData.role === 'hospital' || formData.role === 'bloodbank') && !formData.hospitalName) {
+      return toast.error('Please enter name');
     }
-    // ফোন নাম্বার ভ্যালিডেশন (Firebase এর জন্য +880 দিয়ে শুরু হতে হবে)
     if (!formData.phone.startsWith('+')) {
       return toast.error('Phone number must start with + (e.g., +88017XXXXXXXX)');
     }
@@ -102,7 +95,6 @@ export default function Register() {
     setSendingOtp(true);
 
     try {
-      // Invisible Recaptcha সেটআপ
       if (!window.recaptchaVerifier) {
         window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
           size: 'invisible',
@@ -110,21 +102,19 @@ export default function Register() {
         });
       }
 
-      // Firebase দিয়ে OTP পাঠানো
       const confirmationResult = await signInWithPhoneNumber(auth, formData.phone, window.recaptchaVerifier);
-      window.confirmationResult = confirmationResult; // OTP ভেরিফাই করার জন্য গ্লোবালি সেভ
+      window.confirmationResult = confirmationResult;
       
       setOtpSent(true);
       toast.success('OTP sent to your phone!');
     } catch (error) {
       console.error("OTP Error:", error);
-      toast.error(error.message || 'Failed to send OTP. Check phone format.');
+      toast.error(error.message || 'Failed to send OTP.');
     } finally {
       setSendingOtp(false);
     }
   };
 
-  // ✅ OTP ভেরিফাই ও রেজিস্ট্রেশন সম্পন্ন করার ফাংশন
   const handleVerifyAndRegister = async (e) => {
     e.preventDefault();
     if (!otp || otp.length < 6) return toast.error('Please enter valid 6-digit OTP');
@@ -132,14 +122,11 @@ export default function Register() {
     setVerifyingOtp(true);
 
     try {
-      // Firebase OTP ভেরিফাই
       await window.confirmationResult.confirm(otp);
-      
       toast.success('Phone verified!');
       
-      // OTP সফল হলে ব্যাকএন্ডে ডাটা সেভ করুন
       const { confirmPassword, ...userData } = formData;
-      if (formData.role === 'hospital' && !userData.name) {
+      if ((formData.role === 'hospital' || formData.role === 'bloodbank') && !userData.name) {
         userData.name = formData.hospitalName;
       }
 
@@ -166,7 +153,7 @@ export default function Register() {
   if (step === 'role') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-pink-50 py-20 px-4">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-3xl w-full">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-5xl w-full">
           <div className="text-center mb-10">
             <div className="flex justify-center mb-4">
               <div className="relative">
@@ -178,38 +165,58 @@ export default function Register() {
             <p className="text-gray-500 text-lg">Choose how you want to use the platform</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Donor Card */}
             <motion.button whileHover={{ scale: 1.03, y: -5 }} whileTap={{ scale: 0.98 }} onClick={() => handleRoleSelect('donor')} className="bg-white rounded-3xl p-8 shadow-xl border-2 border-transparent hover:border-red-500 transition-all text-left group">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                 <GiBlood className="w-10 h-10 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-gray-800 mb-2">I'm a Donor 🩸</h3>
-              <p className="text-gray-600 mb-5">Donate blood and help save lives. Get notified when your blood type is needed nearby.</p>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center gap-2"><FaCheckCircle className="w-4 h-4 text-green-500" />Donate blood to blood banks</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="w-4 h-4 text-green-500" />Respond to emergency requests</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="w-4 h-4 text-green-500" />Track your donation history</li>
+              <p className="text-gray-600 mb-5 text-sm">Donate blood and help save lives. Get notified when your blood type is needed nearby.</p>
+              <ul className="space-y-2 text-xs text-gray-600">
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Donate blood to blood banks</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Respond to emergency requests</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Track your donation history</li>
               </ul>
               <div className="mt-6 pt-5 border-t flex items-center justify-between">
-                <span className="text-red-600 font-semibold">Continue as Donor</span>
+                <span className="text-red-600 font-semibold text-sm">Continue as Donor</span>
                 <span className="text-red-600 text-xl group-hover:translate-x-2 transition-transform">→</span>
               </div>
             </motion.button>
 
+            {/* Hospital Card */}
             <motion.button whileHover={{ scale: 1.03, y: -5 }} whileTap={{ scale: 0.98 }} onClick={() => handleRoleSelect('hospital')} className="bg-white rounded-3xl p-8 shadow-xl border-2 border-transparent hover:border-blue-500 transition-all text-left group">
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
                 <FaHospital className="w-10 h-10 text-white" />
               </div>
               <h3 className="text-2xl font-bold text-gray-800 mb-2">I'm a Hospital 🏥</h3>
-              <p className="text-gray-600 mb-5">Request blood for your patients and connect with verified donors in your area.</p>
-              <ul className="space-y-2 text-sm text-gray-600">
-                <li className="flex items-center gap-2"><FaCheckCircle className="w-4 h-4 text-green-500" />Create blood requests</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="w-4 h-4 text-green-500" />Find donors instantly</li>
-                <li className="flex items-center gap-2"><FaCheckCircle className="w-4 h-4 text-green-500" />Manage patient blood needs</li>
+              <p className="text-gray-600 mb-5 text-sm">Request blood for your patients and connect with verified donors in your area.</p>
+              <ul className="space-y-2 text-xs text-gray-600">
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Create blood requests</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Find donors instantly</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Manage patient blood needs</li>
               </ul>
               <div className="mt-6 pt-5 border-t flex items-center justify-between">
-                <span className="text-blue-600 font-semibold">Continue as Hospital</span>
+                <span className="text-blue-600 font-semibold text-sm">Continue as Hospital</span>
                 <span className="text-blue-600 text-xl group-hover:translate-x-2 transition-transform">→</span>
+              </div>
+            </motion.button>
+
+            {/* Blood Bank Card */}
+            <motion.button whileHover={{ scale: 1.03, y: -5 }} whileTap={{ scale: 0.98 }} onClick={() => handleRoleSelect('bloodbank')} className="bg-white rounded-3xl p-8 shadow-xl border-2 border-transparent hover:border-green-500 transition-all text-left group">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
+                <FaDatabase className="w-10 h-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">I'm a Blood Bank 🏦</h3>
+              <p className="text-gray-600 mb-5 text-sm">Manage your blood inventory and connect with hospitals and donors.</p>
+              <ul className="space-y-2 text-xs text-gray-600">
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Manage live inventory</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Update blood stock</li>
+                <li className="flex items-center gap-2"><FaCheckCircle className="w-3 h-3 text-green-500" />Help hospitals in need</li>
+              </ul>
+              <div className="mt-6 pt-5 border-t flex items-center justify-between">
+                <span className="text-green-600 font-semibold text-sm">Continue as Bank</span>
+                <span className="text-green-600 text-xl group-hover:translate-x-2 transition-transform">→</span>
               </div>
             </motion.button>
           </div>
@@ -225,10 +232,14 @@ export default function Register() {
   // ============ STEP 2: Registration Form ============
   const isDonor = formData.role === 'donor';
   const isHospital = formData.role === 'hospital';
+  const isBloodBank = formData.role === 'bloodbank';
+
+  const btnClass = isDonor ? 'btn-primary' : isHospital ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' : 'bg-green-600 hover:bg-green-700 text-white shadow-lg';
+  const bgClass = isDonor ? 'bg-red-100 border-red-200 hover:border-red-400' : isHospital ? 'bg-blue-100 border-blue-200 hover:border-blue-400' : 'bg-green-100 border-green-200 hover:border-green-400';
+  const iconBgClass = isDonor ? 'bg-red-600' : isHospital ? 'bg-blue-600' : 'bg-green-600';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 via-white to-pink-50 py-20 px-4">
-      {/* ✅ Invisible Recaptcha Container */}
       <div id="recaptcha-container"></div>
 
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="max-w-2xl w-full bg-white rounded-3xl shadow-2xl p-8 border border-red-100">
@@ -238,39 +249,60 @@ export default function Register() {
           <div className="flex justify-center mb-4">
             {isDonor ? (
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center"><GiBlood className="w-10 h-10 text-white" /></div>
-            ) : (
+            ) : isHospital ? (
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center"><FaHospital className="w-10 h-10 text-white" /></div>
+            ) : (
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center"><FaDatabase className="w-10 h-10 text-white" /></div>
             )}
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-800">{isDonor ? 'Donor Registration' : 'Hospital Registration'}</h2>
-          <p className="text-gray-500 mt-2">{isDonor ? 'Create your donor account to start saving lives' : 'Register your hospital to request blood'}</p>
+          <h2 className="text-3xl font-extrabold text-gray-800">
+            {isDonor ? 'Donor Registration' : isHospital ? 'Hospital Registration' : 'Blood Bank Registration'}
+          </h2>
+          <p className="text-gray-500 mt-2">
+            {isDonor ? 'Create your donor account to start saving lives' : isHospital ? 'Register your hospital to request blood' : 'Register your blood bank to manage inventory'}
+          </p>
         </div>
 
-        {/* ✅ OTP Form vs Registration Form */}
         {!otpSent ? (
           <form onSubmit={handleSendOTP} className="space-y-6">
             {/* Profile Image */}
             <div className="flex flex-col items-center mb-4">
               <div className="relative">
-                <div className={`w-24 h-24 rounded-full flex items-center justify-center overflow-hidden cursor-pointer border-4 transition-colors ${isDonor ? 'bg-red-100 border-red-200 hover:border-red-400' : 'bg-blue-100 border-blue-200 hover:border-blue-400'}`} onClick={() => fileInputRef.current?.click()}>
-                  {imagePreview ? <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" /> : isHospital ? (
+                <div className={`w-24 h-24 rounded-full flex items-center justify-center overflow-hidden cursor-pointer border-4 transition-colors ${bgClass}`} onClick={() => fileInputRef.current?.click()}>
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : isBloodBank ? (
+                    <div className="text-center"><FaDatabase className="w-10 h-10 text-green-400 mx-auto" /><span className="text-xs text-gray-500">Logo</span></div>
+                  ) : isHospital ? (
                     <div className="text-center"><FaHospital className="w-10 h-10 text-blue-400 mx-auto" /><span className="text-xs text-gray-500">Logo</span></div>
                   ) : (
                     <div className="text-center"><FaUser className="w-10 h-10 text-red-400 mx-auto" /><span className="text-xs text-gray-500">Photo</span></div>
                   )}
                 </div>
                 <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                <div className={`absolute bottom-0 right-0 rounded-full p-1.5 border-2 border-white ${isDonor ? 'bg-red-600' : 'bg-blue-600'}`}><FaCamera className="w-3 h-3 text-white" /></div>
+                <div className={`absolute bottom-0 right-0 rounded-full p-1.5 border-2 border-white ${iconBgClass}`}><FaCamera className="w-3 h-3 text-white" /></div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">{isHospital ? 'Upload hospital logo (optional)' : 'Upload profile photo (optional)'}</p>
+              <p className="text-xs text-gray-500 mt-2">{isDonor ? 'Upload profile photo (optional)' : 'Upload logo (optional)'}</p>
             </div>
 
-            {/* DONOR FIELDS */}
+            {/* ============ DONOR FIELDS ============ */}
             {isDonor && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="input-label">Full Name *</label><div className="relative"><FaUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" name="name" value={formData.name} onChange={handleChange} className="input-field pl-12" placeholder="Enter your name" required /></div></div>
-                  <div><label className="input-label">Email Address *</label><div className="relative"><FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="email" name="email" value={formData.email} onChange={handleChange} className="input-field pl-12" placeholder="you@example.com" required /></div></div>
+                  <div>
+                    <label className="input-label">Full Name *</label>
+                    <div className="relative">
+                      <FaUser className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="text" name="name" value={formData.name} onChange={handleChange} className="input-field pl-12" placeholder="Enter your name" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Email Address *</label>
+                    <div className="relative">
+                      <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="email" name="email" value={formData.email} onChange={handleChange} className="input-field pl-12" placeholder="you@example.com" required />
+                    </div>
+                  </div>
                   <div>
                     <label className="input-label">Phone Number *</label>
                     <div className="relative">
@@ -279,22 +311,69 @@ export default function Register() {
                     </div>
                     <p className="text-xs text-gray-500 mt-1">Must include country code (+880)</p>
                   </div>
-                  <div><label className="input-label">Blood Group *</label><select name="bloodGroup" value={formData.bloodGroup} onChange={handleChange} className="select-field" required><option value="">Select Blood Group</option>{bloodGroups.map(group => <option key={group} value={group}>{group}</option>)}</select></div>
-                  <div><label className="input-label">Age *</label><div className="relative"><FaCalendarAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="number" name="age" value={formData.age} onChange={handleChange} className="input-field pl-12" placeholder="16-65" min="16" max="65" required /></div></div>
+                  <div>
+                    <label className="input-label">Blood Group *</label>
+                    <select name="bloodGroup" value={formData.bloodGroup} onChange={handleChange} className="select-field" required>
+                      <option value="">Select Blood Group</option>
+                      {bloodGroups.map(group => <option key={group} value={group}>{group}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Age *</label>
+                    <div className="relative">
+                      <FaCalendarAlt className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="number" name="age" value={formData.age} onChange={handleChange} className="input-field pl-12" placeholder="16-65" min="16" max="65" required />
+                    </div>
+                  </div>
                 </div>
-                <div><label className="input-label">Address *</label><div className="relative"><FaMapMarkerAlt className="absolute left-4 top-3 text-gray-400" /><textarea name="address" value={formData.address} onChange={handleChange} className="input-field pl-12 min-h-[80px]" placeholder="Your area, city" rows="2" required /></div></div>
+                <div>
+                  <label className="input-label">Address *</label>
+                  <div className="relative">
+                    <FaMapMarkerAlt className="absolute left-4 top-3 text-gray-400" />
+                    <textarea name="address" value={formData.address} onChange={handleChange} className="input-field pl-12 min-h-[80px]" placeholder="Your area, city" rows="2" required />
+                  </div>
+                </div>
               </>
             )}
 
-            {/* HOSPITAL FIELDS */}
+            {/* ============ HOSPITAL FIELDS ============ */}
             {isHospital && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="input-label">Hospital Name *</label><div className="relative"><FaHospital className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" name="hospitalName" value={formData.hospitalName} onChange={handleChange} className="input-field pl-12" placeholder="e.g., City Hospital" required /></div></div>
-                  <div><label className="input-label">Email Address *</label><div className="relative"><FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="email" name="email" value={formData.email} onChange={handleChange} className="input-field pl-12" placeholder="hospital@example.com" required /></div></div>
-                  <div><label className="input-label">Hospital Type *</label><select name="hospitalType" value={formData.hospitalType} onChange={handleChange} className="select-field" required>{hospitalTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}</select></div>
-                  <div><label className="input-label">Registration Number *</label><div className="relative"><FaIdCard className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" name="registrationNumber" value={formData.registrationNumber} onChange={handleChange} className="input-field pl-12" placeholder="Hospital license/reg no." required /></div></div>
-                  <div><label className="input-label">Contact Person *</label><div className="relative"><FaUserMd className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange} className="input-field pl-12" placeholder="Admin/Manager name" required /></div></div>
+                  <div>
+                    <label className="input-label">Hospital Name *</label>
+                    <div className="relative">
+                      <FaHospital className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="text" name="hospitalName" value={formData.hospitalName} onChange={handleChange} className="input-field pl-12" placeholder="e.g., City Hospital" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Email Address *</label>
+                    <div className="relative">
+                      <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="email" name="email" value={formData.email} onChange={handleChange} className="input-field pl-12" placeholder="hospital@example.com" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Hospital Type *</label>
+                    <select name="hospitalType" value={formData.hospitalType} onChange={handleChange} className="select-field" required>
+                      {hospitalTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Registration Number *</label>
+                    <div className="relative">
+                      <FaIdCard className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="text" name="registrationNumber" value={formData.registrationNumber} onChange={handleChange} className="input-field pl-12" placeholder="Hospital license/reg no." required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Contact Person *</label>
+                    <div className="relative">
+                      <FaUserMd className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange} className="input-field pl-12" placeholder="Admin/Manager name" required />
+                    </div>
+                  </div>
                   <div>
                     <label className="input-label">Main Phone *</label>
                     <div className="relative">
@@ -303,26 +382,117 @@ export default function Register() {
                     </div>
                     <p className="text-xs text-gray-500 mt-1">Must include country code (+880)</p>
                   </div>
-                  <div><label className="input-label">Emergency Hotline</label><div className="relative"><FaPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="tel" name="emergencyHotline" value={formData.emergencyHotline} onChange={handleChange} className="input-field pl-12" placeholder="Emergency contact" /></div></div>
-                  <div><label className="input-label">Website (Optional)</label><div className="relative"><FaGlobe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type="url" name="website" value={formData.website} onChange={handleChange} className="input-field pl-12" placeholder="https://hospital.com" /></div></div>
+                  <div>
+                    <label className="input-label">Emergency Hotline</label>
+                    <div className="relative">
+                      <FaPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="tel" name="emergencyHotline" value={formData.emergencyHotline} onChange={handleChange} className="input-field pl-12" placeholder="Emergency contact" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Website (Optional)</label>
+                    <div className="relative">
+                      <FaGlobe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="url" name="website" value={formData.website} onChange={handleChange} className="input-field pl-12" placeholder="https://hospital.com" />
+                    </div>
+                  </div>
                 </div>
-                <div><label className="input-label">Full Address *</label><div className="relative"><FaMapMarkerAlt className="absolute left-4 top-3 text-gray-400" /><textarea name="address" value={formData.address} onChange={handleChange} className="input-field pl-12 min-h-[80px]" placeholder="Street, area, city, postal code" rows="2" required /></div></div>
+                <div>
+                  <label className="input-label">Full Address *</label>
+                  <div className="relative">
+                    <FaMapMarkerAlt className="absolute left-4 top-3 text-gray-400" />
+                    <textarea name="address" value={formData.address} onChange={handleChange} className="input-field pl-12 min-h-[80px]" placeholder="Street, area, city, postal code" rows="2" required />
+                  </div>
+                </div>
               </>
             )}
 
-            {/* PASSWORD FIELDS */}
+            {/* ============ BLOOD BANK FIELDS ============ */}
+            {isBloodBank && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="input-label">Blood Bank Name *</label>
+                    <div className="relative">
+                      <FaDatabase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="text" name="hospitalName" value={formData.hospitalName} onChange={handleChange} className="input-field pl-12" placeholder="e.g., Red Cross Blood Bank" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Email Address *</label>
+                    <div className="relative">
+                      <FaEnvelope className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="email" name="email" value={formData.email} onChange={handleChange} className="input-field pl-12" placeholder="bank@example.com" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">License Number *</label>
+                    <div className="relative">
+                      <FaIdCard className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="text" name="registrationNumber" value={formData.registrationNumber} onChange={handleChange} className="input-field pl-12" placeholder="License No." required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Manager/Contact Person *</label>
+                    <div className="relative">
+                      <FaUserMd className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="text" name="contactPerson" value={formData.contactPerson} onChange={handleChange} className="input-field pl-12" placeholder="Manager Name" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Main Phone *</label>
+                    <div className="relative">
+                      <FaPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className="input-field pl-12" placeholder="+8801XXXXXXXXX" required />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Must include country code (+880)</p>
+                  </div>
+                  <div>
+                    <label className="input-label">Emergency Hotline</label>
+                    <div className="relative">
+                      <FaPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="tel" name="emergencyHotline" value={formData.emergencyHotline} onChange={handleChange} className="input-field pl-12" placeholder="Emergency contact" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="input-label">Website (Optional)</label>
+                    <div className="relative">
+                      <FaGlobe className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="url" name="website" value={formData.website} onChange={handleChange} className="input-field pl-12" placeholder="https://bloodbank.com" />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="input-label">Full Address *</label>
+                  <div className="relative">
+                    <FaMapMarkerAlt className="absolute left-4 top-3 text-gray-400" />
+                    <textarea name="address" value={formData.address} onChange={handleChange} className="input-field pl-12 min-h-[80px]" placeholder="Street, area, city, postal code" rows="2" required />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ============ PASSWORD FIELDS (COMMON) ============ */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="input-label">Password *</label>
-                <div className="relative"><FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type={showPassword ? 'text' : 'password'} name="password" value={formData.password} onChange={handleChange} className="input-field pl-12 pr-12" placeholder="Min 6 characters" required minLength="6" /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">{showPassword ? <FaEyeSlash /> : <FaEye />}</button></div>
+                <div className="relative">
+                  <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type={showPassword ? 'text' : 'password'} name="password" value={formData.password} onChange={handleChange} className="input-field pl-12 pr-12" placeholder="Min 6 characters" required minLength="6" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">{showPassword ? <FaEyeSlash /> : <FaEye />}</button>
+                </div>
               </div>
               <div>
                 <label className="input-label">Confirm Password *</label>
-                <div className="relative"><FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" /><input type={showConfirmPassword ? 'text' : 'password'} name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} className="input-field pl-12 pr-12" placeholder="Confirm password" required /><button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">{showConfirmPassword ? <FaEyeSlash /> : <FaEye />}</button></div>
+                <div className="relative">
+                  <FaLock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input type={showConfirmPassword ? 'text' : 'password'} name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} className="input-field pl-12 pr-12" placeholder="Confirm password" required />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">{showConfirmPassword ? <FaEyeSlash /> : <FaEye />}</button>
+                </div>
               </div>
             </div>
 
-            <button type="submit" disabled={sendingOtp} className={`w-full py-3 text-lg rounded-lg font-semibold transition-all ${isDonor ? 'btn-primary' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg'} disabled:opacity-50`}>
+            <button type="submit" disabled={sendingOtp} className={`w-full py-3 text-lg rounded-lg font-semibold transition-all ${btnClass} disabled:opacity-50`}>
               {sendingOtp ? (
                 <span className="flex items-center justify-center gap-2"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>Sending OTP...</span>
               ) : (
@@ -331,7 +501,7 @@ export default function Register() {
             </button>
           </form>
         ) : (
-          /* ✅ OTP VERIFICATION FORM */
+          /* ============ OTP VERIFICATION FORM ============ */
           <motion.form initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} onSubmit={handleVerifyAndRegister} className="space-y-6">
             <div className="text-center">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -356,7 +526,7 @@ export default function Register() {
 
             <div className="flex gap-3">
               <button type="button" onClick={() => setOtpSent(false)} className="btn-outline w-1/3">Back</button>
-              <button type="submit" disabled={verifyingOtp || otp.length < 6} className={`w-2/3 py-3 rounded-lg font-semibold transition-all ${isDonor ? 'btn-primary' : 'bg-blue-600 hover:bg-blue-700 text-white'} disabled:opacity-50`}>
+              <button type="submit" disabled={verifyingOtp || otp.length < 6} className={`w-2/3 py-3 rounded-lg font-semibold transition-all ${btnClass} disabled:opacity-50`}>
                 {verifyingOtp ? (
                   <span className="flex items-center justify-center gap-2"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>Verifying...</span>
                 ) : 'Verify & Create Account'}
